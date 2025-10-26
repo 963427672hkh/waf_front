@@ -108,8 +108,8 @@ Content-Type: application/json
   "code": 200,
   "message": "登录成功",
   "data": {
-    "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOjEsInVzZXJuYW1lIjoiYWRtaW5fdXBkYXRlZCIsInJvbGUiOiJBRE1JTiIsImlhdCI6MTcyOTQyNTYwMCwiZXhwIjoxNzI5NDI2NTAwfQ.example",
-    "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOjEsInVzZXJuYW1lIjoiYWRtaW5fdXBkYXRlZCIsInJvbGUiOiJBRE1JTiIsImlhdCI6MTcyOTQyNTYwMCwiZXhwIjoxNzMwMDMwNDAwfQ.example",
+    "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOjEsInVzZXJuYW1lIjoiYWRtaW5fdXBkYXRlZCIsInJvbGUiOiJBRE1JTiIsImlhdCI6MTcyOTQyNTYwMCwiZXhwIjoxNzI5NDI2NTAwfQ.example",
+    "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOjEsInVzZXJuYW1lIjoiYWRtaW5fdXBkYXRlZCIsInJvbGUiOiJBRE1JTiIsImlhdCI6MTcyOTQyNTYwMCwiZXhwIjoxNzMwMDMwNDAwfQ.example",
     "expires_in": 900,
     "token_type": "Bearer"
   },

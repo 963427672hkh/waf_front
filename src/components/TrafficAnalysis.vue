@@ -245,40 +245,72 @@
   </div>
 </template>
 
-<script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
+<script setup>
+import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import * as echarts from 'echarts'
 import 'echarts-gl'
 import { countryCoords } from '../data/countryCoords'
 import { useDashboard } from '../composables/useDashboard'
+import { trafficAPI } from '../api'
 
-// 使用dashboard composable
+// 使用dashboard composable - 获取全局状态
 const { 
-  data, 
+  data: dashboardData, 
+  useMockData,
   formatNumber,
   formatPercentage 
 } = useDashboard()
 
-// 模拟数据
-const kpiData = ref({
-  requests: 21700,
-  pageViews: 6500,
-  uniqueVisitors: 492,
-  uniqueIPs: 673,
-  intercepts: 12000,
-  attackIPs: 93,
-  error4xx: 3900,
-  error4xxRate: 17.72,
-  intercept4xx: 12000,
-  intercept4xxRate: 55.22,
-  error5xx: 236,
-  error5xxRate: 1.09,
-  avgResponseTime: 245,
-  bandwidth: 1250,
-  sslConnections: 1850,
-  countries: 45,
-  mobileTraffic: 3200,
-  desktopTraffic: 3300
+// 加载状态
+const loading = ref(false)
+
+// KPI数据 - 从全局状态获取
+const kpiData = computed(() => {
+  // 如果有API数据，使用API数据
+  if (dashboardData.kpi) {
+    return {
+      requests: dashboardData.kpi.requests ?? 0,
+      pageViews: dashboardData.kpi.pageViews ?? 0,
+      uniqueVisitors: dashboardData.kpi.uniqueVisitors ?? 0,
+      uniqueIPs: dashboardData.kpi.uniqueIPs ?? 0,
+      intercepts: dashboardData.kpi.intercepts ?? 0,
+      attackIPs: dashboardData.kpi.attackIPs ?? 0,
+      error4xx: dashboardData.kpi.error4xx ?? 0,
+      error4xxRate: dashboardData.kpi.error4xxRate ?? 0,
+      intercept4xx: dashboardData.kpi.intercept4xx ?? 0,
+      intercept4xxRate: dashboardData.kpi.intercept4xxRate ?? 0,
+      error5xx: dashboardData.kpi.error5xx ?? 0,
+      error5xxRate: dashboardData.kpi.error5xxRate ?? 0,
+      avgResponseTime: dashboardData.kpi.avgResponseTime ?? 0,
+      bandwidth: dashboardData.kpi.bandwidth ?? 0,
+      sslConnections: dashboardData.kpi.sslConnections ?? 0,
+      countries: dashboardData.kpi.countries ?? 0,
+      mobileTraffic: dashboardData.kpi.mobileTraffic ?? 0,
+      desktopTraffic: dashboardData.kpi.desktopTraffic ?? 0
+    }
+  }
+  
+  // 如果没有数据，使用模拟数据
+  return {
+    requests: 21700,
+    pageViews: 6500,
+    uniqueVisitors: 492,
+    uniqueIPs: 673,
+    intercepts: 12000,
+    attackIPs: 93,
+    error4xx: 3900,
+    error4xxRate: 17.72,
+    intercept4xx: 12000,
+    intercept4xxRate: 55.22,
+    error5xx: 236,
+    error5xxRate: 1.09,
+    avgResponseTime: 245,
+    bandwidth: 1250,
+    sslConnections: 1850,
+    countries: 45,
+    mobileTraffic: 3200,
+    desktopTraffic: 3300
+  }
 })
 
 const visitData = ref({
@@ -354,13 +386,13 @@ const geoMetric = ref('visit')
 // QPS自动刷新状态
 const qpsAutoRefresh = ref(true)
 const qpsRefreshInterval = ref(30)
-let qpsTimer: number | null = null
+let qpsTimer = null
 
 // 缓存图表实例
 const chartInstances = new Map()
 
 // 获取图表实例
-const getChart = (idOrEl: string | HTMLElement) => {
+const getChart = (idOrEl) => {
   const el = typeof idOrEl === 'string' ? document.getElementById(idOrEl) : idOrEl
   if (!el) return null
   
@@ -427,7 +459,7 @@ const rankedCountries = computed(() => {
 })
 
 // 设置地理位置视图
-const setGeoView = (view: string) => {
+const setGeoView = (view) => {
   if (geoScope.value === 'china' && view === '3d') {
     geoView.value = '2d'
     return
@@ -436,7 +468,7 @@ const setGeoView = (view: string) => {
 }
 
 // 设置地理位置范围
-const setGeoScope = (scope: string) => {
+const setGeoScope = (scope) => {
   geoScope.value = scope
   if (scope === 'china') {
     geoView.value = '2d'
@@ -444,7 +476,7 @@ const setGeoScope = (scope: string) => {
 }
 
 // 设置度量
-const setGeoMetric = (metric: string) => {
+const setGeoMetric = (metric) => {
   geoMetric.value = metric
 }
 
@@ -476,7 +508,7 @@ const toggleQpsAutoRefresh = () => {
   }
 }
 
-const setQpsRefreshInterval = (seconds: number) => {
+const setQpsRefreshInterval = (seconds) => {
   qpsRefreshInterval.value = seconds
   if (qpsAutoRefresh.value) {
     startQpsAutoRefresh()
@@ -940,7 +972,7 @@ const initAttackTypeChart = () => {
       borderColor: '#ff8c00',
       borderWidth: 1,
       textStyle: { color: '#fff' },
-      formatter: function (params: any) {
+      formatter: function (params) {
         return `<div style="padding: 8px;">
           <div style="font-weight: bold; color: #ff8c00; margin-bottom: 4px;">${params.name}</div>
           <div style="color: #fff;">攻击次数: <span style="color: #4a9eff; font-weight: bold;">${params.value}</span></div>
@@ -1075,8 +1107,8 @@ const initPerformanceChart = () => {
 }
 
 // 获取攻击类型颜色
-const getAttackTypeColor = (type: string) => {
-  const colors: { [key: string]: string } = {
+const getAttackTypeColor = (type) => {
+  const colors = {
     'SQL注入': '#ff4d4f',
     'XSS攻击': '#ff8c00',
     '目录遍历': '#52c41a',
@@ -1084,6 +1116,84 @@ const getAttackTypeColor = (type: string) => {
     '文件包含': '#1890ff'
   }
   return colors[type] || '#666'
+}
+
+// 从后端获取KPI数据
+const fetchKpiData = async () => {
+  // 如果使用模拟数据，不调用API
+  if (useMockData.value) {
+    console.log('当前使用模拟数据，跳过API调用')
+    return
+  }
+  
+  try {
+    loading.value = true
+    console.log('开始获取流量分析数据...')
+    
+    // 调用后端接口
+    const response = await trafficAPI.getAccessStats()
+    
+    console.log('获取到的完整响应:', response)
+    
+    // 根据后端实际返回的数据结构解析
+    // 后端返回格式：{ code: 200, message: "操作成功", data: {...}, timestamp: ... }
+    let statsData = null
+    
+    if (response) {
+      // 如果响应有 code 字段，说明是标准格式
+      if (response.code === 200 && response.data) {
+        statsData = response.data
+      } 
+      // 如果响应直接是数据对象
+      else if (response.totalRequests !== undefined) {
+        statsData = response
+      }
+      // 如果响应里面有嵌套的 data
+      else if (response.data) {
+        statsData = response.data
+      }
+    }
+    
+    console.log('解析后的统计数据:', statsData)
+    
+    if (statsData) {
+      // 从 statsData.data 中提取实际数据
+      const actualData = statsData.data || statsData
+      
+      console.log('实际数据:', actualData)
+      
+      // 更新全局状态中的KPI数据，映射字段
+      dashboardData.kpi = {
+        requests: actualData.totalRequests ?? 0, // 总请求数
+        pageViews: actualData.allowedRequests ?? 0, // 访问次数
+        uniqueVisitors: actualData.uniqueIps ?? 0, // 独立访客(UV) - 使用独立IP
+        uniqueIPs: actualData.uniqueIps ?? 0, // 独立IP
+        intercepts: actualData.blockedRequests ?? 0, // 拦截次数
+        attackIPs: actualData.attackIPs ?? 0, // 攻击IP
+        error4xx: actualData.error4xx ?? 0, // 4xx错误数
+        error4xxRate: actualData.error4xxRate ?? 0, // 4xx错误率
+        intercept4xx: actualData.intercept4xx ?? 0, // 4xx拦截数
+        intercept4xxRate: actualData.intercept4xxRate ?? 0, // 4xx拦截率
+        error5xx: actualData.error5xx ?? 0, // 5xx错误数
+        error5xxRate: actualData.error5xxRate ?? 0, // 5xx错误率
+        avgResponseTime: Math.round((actualData.avgResponseTime || 0) * 1000), // 平均响应时间，从秒转为毫秒
+        bandwidth: Math.round((actualData.totalBytes || 0) / 1024 / 1024), // 宽带使用，从字节转为MB
+        sslConnections: actualData.sslConnections ?? 0, // SSL连接数
+        countries: actualData.countries ?? 0, // 访问国家数
+        mobileTraffic: actualData.mobileTraffic ?? 0, // 移动端流量
+        desktopTraffic: actualData.desktopTraffic ?? 0 // 桌面端流量
+      }
+      
+      console.log('KPI数据已更新到全局状态:', dashboardData.kpi)
+    } else {
+      console.warn('未能解析统计数据')
+    }
+  } catch (error) {
+    console.error('获取流量分析数据失败:', error)
+    // 不设置模拟数据，保持为空
+  } finally {
+    loading.value = false
+  }
 }
 
 // 初始化所有图表
@@ -1107,9 +1217,31 @@ const initAllCharts = () => {
 }
 
 onMounted(async () => {
+  // 首先获取KPI数据
+  await fetchKpiData()
+  
   await nextTick()
   initAllCharts()
   startQpsAutoRefresh()
+  
+  })
+
+// 监听 useMockData 变化，重新获取数据
+watch(useMockData, async (newValue) => {
+  console.log('=== TrafficAnalysis: useMockData 变化了 ===')
+  console.log('新值:', newValue)
+  
+  if (!newValue) {
+    // 切换到API数据，重新获取
+    console.log('切换到API数据，重新获取KPI数据')
+    await fetchKpiData()
+  } else {
+    // 切换到模拟数据，使用全局的 mockAllDashboardData
+    console.log('切换到模拟数据')
+  }
+  
+  await nextTick()
+  initAllCharts()
 })
 
 onUnmounted(() => {
