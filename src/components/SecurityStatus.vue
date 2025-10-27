@@ -248,10 +248,10 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import axios from 'axios'
 import AttackTrendChart from './dashboard/AttackTrendChart.vue'
 import AttackTypePie from './dashboard/AttackTypePie.vue'
 import BlackWhiteTrend from './dashboard/BlackWhiteTrend.vue'
-import { securityAPI } from '../api/securityAPI'
 
 // 加载状态
 const loading = ref(true)
@@ -378,11 +378,14 @@ const recentAttacksData = ref([
 // 获取攻击类型颜色
 const getAttackColor = (type: string) => {
   const colors: { [key: string]: string } = {
+    'XSS攻击': '#4a9eff',
+    'SQL注入': '#ff8c00',
+    '命令注入': '#52c41a',
+    '文件包含': '#722ed1',
+    '目录遍历': '#1890ff',
     '目录穿越': '#4a9eff',
     '后门': '#ff8c00',
-    '信息泄露': '#52c41a',
-    '文件包含': '#722ed1',
-    '命令注入': '#1890ff'
+    '信息泄露': '#52c41a'
   }
   return colors[type] || '#666'
 }
@@ -415,36 +418,99 @@ const getRuleStatusText = (status: string) => {
   return texts[status] || '未知'
 }
 
+// 根据后端数据结构更新前端数据
+const updateFromBackendData = (statsData: any, securityData: any) => {
+  // 更新顶部统计卡片
+  statCards.value = {
+    attackProtection: statsData.security_events?.total_blocked || 0,
+    blackWhiteList: statsData.rule_info?.total_rules || 0,
+    frequencyLimit: 30, // 暂时保留模拟数据
+    waitingRoom: 0,     // 暂时保留模拟数据
+    humanMachineVerification: 54, // 暂时保留模拟数据
+    identityAuth: 0,    // 暂时保留模拟数据
+    pageProtect: 0      // 暂时保留模拟数据
+  }
+
+  // 更新Web攻击分布
+  webAttackDistribution.value = [
+    { type: 'XSS攻击', count: statsData.security_events?.xss_attempts || 0 },
+    { type: 'SQL注入', count: statsData.security_events?.sql_injection_attempts || 0 },
+    { type: '命令注入', count: statsData.security_events?.rce_attempts || 0 },
+    { type: '文件包含', count: statsData.security_events?.lfi_attempts || 0 },
+    { type: '目录遍历', count: statsData.security_events?.dir_traversal_attempts || 0 }
+  ]
+
+  // 更新威胁等级分布
+  threatLevelData.value = [
+    { name: '高危', value: statsData.security_events?.high_severity || 0, color: '#ff4d4f' },
+    { name: '中危', value: statsData.security_events?.medium_severity || 0, color: '#ff8c00' },
+    { name: '低危', value: statsData.security_events?.low_severity || 0, color: '#52c41a' }
+  ]
+
+  // 更新防护规则状态
+  protectionRules.value = [
+    { name: 'XSS防护', description: `共${statsData.rule_info?.rule_categories?.xss || 0}条规则`, status: 'active' },
+    { name: 'SQL注入防护', description: `共${statsData.rule_info?.rule_categories?.sqli || 0}条规则`, status: 'active' },
+    { name: '命令注入防护', description: `共${statsData.rule_info?.rule_categories?.rce || 0}条规则`, status: 'active' },
+    { name: '文件包含防护', description: `共${statsData.rule_info?.rule_categories?.lfi || 0}条规则`, status: 'active' },
+    { name: '目录遍历防护', description: `共${statsData.rule_info?.rule_categories?.dir_traversal || 0}条规则`, status: 'active' },
+    { name: '自定义规则', description: `共${statsData.rule_info?.rule_categories?.custom || 0}条规则`, status: 'active' }
+  ]
+
+  // 更新安全评分（基于拦截率和规则状态计算）
+  const blockRate = statsData.request_stats?.block_rate || 0
+  const activeRuleRate = statsData.rule_info?.total_rules > 0 
+    ? (statsData.rule_info.active_rules / statsData.rule_info.total_rules) * 100 
+    : 0
+  
+  securityScore.value = Math.min(100, Math.floor((blockRate * 0.3 + activeRuleRate * 0.7) * 100) / 100)
+  protectionCoverage.value = Math.floor(activeRuleRate)
+  responseTime.value = 120 // 暂时保留模拟数据
+  threatDetectionRate.value = Math.floor(blockRate * 10) // 基于拦截率估算
+
+  console.log('成功使用后端数据更新前端展示')
+}
+
 // 数据加载函数
 const loadData = async () => {
   try {
     loading.value = true
     error.value = ''
     
-    // 模拟API调用延迟
-    await new Promise(resolve => setTimeout(resolve, 1000))
+    // 使用代理路径，不再直接调用IP地址
+    const baseURL = '/api'  // 这会通过Vite代理转发到真实后端
     
-    // 暂时使用模拟数据，等后端接口准备好后再启用真实API调用
-    console.log('使用模拟数据 - 等待后端接口对接')
-    
-    // 模拟数据已经在组件中定义，直接使用
-    // 这里可以添加一些数据更新逻辑，比如随机化部分数据
-    
-    // 模拟数据更新（可选）
-    updateMockData()
+    try {
+      // 调用 /system/stats 接口（这个接口数据最全）
+      const statsResponse = await axios.get(`${baseURL}/system/stats`)
+      const statsData = statsResponse.data.data.data
+      
+      // 调用 /system/security 接口作为补充
+      const securityResponse = await axios.get(`${baseURL}/system/security`)
+      const securityData = securityResponse.data.data
+      
+      // 使用后端数据更新前端展示
+      updateFromBackendData(statsData, securityData)
+      
+      console.log('成功加载后端数据')
+    } catch (apiError) {
+      console.warn('API调用失败，使用模拟数据:', apiError)
+      // API失败时使用模拟数据
+      updateMockData()
+    }
     
     loading.value = false
   } catch (err) {
-    error.value = '数据加载失败，请稍后重试'
+    error.value = '数据加载失败，使用模拟数据展示'
     loading.value = false
     console.error('加载安全态势数据失败:', err)
+    updateMockData() // 确保有数据展示
   }
 }
 
 // 模拟数据更新函数（可选）
 const updateMockData = () => {
-  // 可以在这里添加一些动态数据更新逻辑
-  // 比如随机化部分数值，模拟实时数据变化
+  // 保留原有的时间更新逻辑
   const now = new Date()
   const currentHour = now.getHours()
   
@@ -454,8 +520,7 @@ const updateMockData = () => {
     time: `${String(currentHour).padStart(2, '0')}:${String(now.getMinutes() - index).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`
   }))
   
-  // 模拟安全评分微调
-  securityScore.value = Math.max(80, Math.min(95, securityScore.value + Math.floor(Math.random() * 6) - 3))
+  // 不再随机调整安全评分，因为现在使用真实数据
 }
 
 onMounted(() => {
