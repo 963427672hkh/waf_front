@@ -56,10 +56,9 @@
 <script setup>
 import { ref, reactive, onMounted, onBeforeUnmount } from 'vue';
 import * as echarts from 'echarts';
-import worldJson from '../assets/world.json';
 
 // ---------- 数据 & 配置 ----------
-echarts.registerMap('world', worldJson);
+// 地图数据将通过 fetch 动态加载
 
 const stats = reactive({ visitors: 400, requests: 3034, blocked: 267 });
 const attacks = reactive([]);
@@ -106,9 +105,24 @@ function uid() { return Date.now().toString(36) + Math.random().toString(36).sli
 function nowTime() { return new Date().toLocaleString(); }
 
 // ---------- 地图初始化 ----------
-function initChart() {
+async function initChart() {
   const el = document.getElementById('worldMap');
   if (!el) return;
+  
+  // 动态加载世界地图数据
+  try {
+    const response = await fetch('/maps/world.json');
+    if (!response.ok) {
+      console.error('Failed to load world map:', response.status);
+      return;
+    }
+    const worldJson = await response.json();
+    echarts.registerMap('world', worldJson);
+  } catch (error) {
+    console.error('Error loading world map:', error);
+    return;
+  }
+  
   chart = echarts.init(el);
 
   const baseOption = {

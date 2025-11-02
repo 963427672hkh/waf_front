@@ -81,8 +81,6 @@
           <h3 class="panel-title">地理位置</h3>
         </div>
         <div class="geo-controls">
-          <button class="control-btn" :class="{ active: geoView === '3d' }" @click="setGeoView('3d')">3D</button>
-          <button class="control-btn" :class="{ active: geoView === '2d' }" @click="setGeoView('2d')">2D</button>
           <button class="control-btn" :class="{ active: geoScope === 'world' }" @click="setGeoScope('world')">世界</button>
           <button class="control-btn" :class="{ active: geoScope === 'china' }" @click="setGeoScope('china')">中国</button>
           <button class="control-btn" :class="{ active: geoMetric === 'visit' }" @click="setGeoMetric('visit')">访问</button>
@@ -91,8 +89,7 @@
         
         <!-- 地图容器 -->
         <div class="map-container">
-          <div v-if="geoView === '3d'" id="globe" class="globe"></div>
-          <div v-else id="worldMap" class="world-map"></div>
+          <div id="worldMap" class="world-map"></div>
           <!-- 地图数据流动画效果 -->
           <div class="map-data-flow">
             <div class="map-particle" v-for="i in 3" :key="i" :style="`animation-delay: ${i * 0.5}s`"></div>
@@ -247,11 +244,30 @@
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
-import * as echarts from 'echarts'
-import 'echarts-gl'
-import { countryCoords } from '../data/countryCoords'
+import * as echarts from 'echarts/core'
+import { MapChart, LineChart, BarChart, PieChart } from 'echarts/charts'
+import { CanvasRenderer } from 'echarts/renderers'
+import { GeoComponent, TooltipComponent, VisualMapComponent, LegendComponent, GridComponent } from 'echarts/components'
 import { useDashboard } from '../composables/useDashboard'
 import { trafficAPI } from '../api'
+
+// 注册必要的 ECharts 模块
+echarts.use([
+  MapChart,
+  LineChart,
+  BarChart,
+  PieChart,
+  CanvasRenderer,
+  GeoComponent,
+  TooltipComponent,
+  VisualMapComponent,
+  LegendComponent,
+  GridComponent
+])
+
+// 缓存地图数据，避免重复加载
+let worldMapDataCache = null
+let chinaMapDataCache = null
 
 // 使用dashboard composable - 获取全局状态
 const { 
@@ -379,7 +395,6 @@ const performanceData = ref({
 })
 
 // 地理位置视图状态
-const geoView = ref('3d')
 const geoScope = ref('world')
 const geoMetric = ref('visit')
 
@@ -458,21 +473,9 @@ const rankedCountries = computed(() => {
   }))
 })
 
-// 设置地理位置视图
-const setGeoView = (view) => {
-  if (geoScope.value === 'china' && view === '3d') {
-    geoView.value = '2d'
-    return
-  }
-  geoView.value = view
-}
-
 // 设置地理位置范围
 const setGeoScope = (scope) => {
   geoScope.value = scope
-  if (scope === 'china') {
-    geoView.value = '2d'
-  }
 }
 
 // 设置度量
@@ -666,123 +669,36 @@ const initInterceptChart = () => {
   chart.setOption(option)
 }
 
-// 初始化3D地球
-const initGlobe = () => {
-  const globeEl = document.getElementById('globe')
-  if (!globeEl) return
-  
-  const chart = getChart(globeEl)
-  if (!chart) return
-  try { chart.clear() } catch (e) {}
-
-  const countries = worldCountries.value
-
-  // 生成带经纬度的 scatter3D 数据
-  const scatterData = countries.map(c => {
-    const coord = countryCoords[c.name] || countryCoords['中国'] || [104.195397, 35.86166]
-    return {
-      name: c.name,
-      value: [coord[0], coord[1], c.value]
-    }
-  }).filter(d => Array.isArray(d.value) && d.value.length === 3)
-
-  const values = countries.map(c => c.value || 0)
-  const max = Math.max(...values, 1)
-  const min = Math.min(...values, 0)
-
-  const getColor = (v) => {
-    const ratio = (v - min) / (max - min || 1)
-    const start = [30, 60, 120] // 深蓝
-    const end = [255, 140, 0] // 橙色
-    const r = Math.round(start[0] + (end[0] - start[0]) * ratio)
-    const g = Math.round(start[1] + (end[1] - start[1]) * ratio)
-    const b = Math.round(start[2] + (end[2] - start[2]) * ratio)
-    return `rgb(${r},${g},${b})`
-  }
-
-  const option = {
-    backgroundColor: 'transparent',
-    globe: {
-      baseTexture: 'https://cdn.jsdelivr.net/gh/apache/echarts-website@asf-site/examples/data-gl/asset/world.topo.bathy.200401.jpg',
-      heightTexture: 'https://cdn.jsdelivr.net/gh/apache/echarts-website@asf-site/examples/data-gl/asset/bathymetry_bw_composite_4k.jpg',
-      shading: 'lambert',
-      lambertMaterial: { 
-        detailTexture: 'https://cdn.jsdelivr.net/gh/apache/echarts-website@asf-site/examples/data-gl/asset/world.topo.bathy.200401.jpg'
-      },
-      light: { 
-        ambient: { 
-          intensity: 0.6,
-          color: '#ffffff'
-        }, 
-        main: { 
-          intensity: 0.8,
-          color: '#ffffff'
-        }
-      },
-      viewControl: { 
-        autoRotate: true,
-        autoRotateSpeed: 5,
-        distance: 100, 
-        minDistance: 50,
-        maxDistance: 150,
-        alpha: 20,
-        beta: 20
-      }
-    },
-    series: [
-      {
-        type: 'scatter3D',
-        coordinateSystem: 'globe',
-        symbol: 'circle',
-        symbolSize: function (val) {
-          const v = val[2] || 0
-          return Math.max(3, Math.min(20, (v / max) * 20))
-        },
-        itemStyle: { 
-          opacity: 0.9,
-          borderWidth: 1,
-          borderColor: '#ffffff'
-        },
-        emphasis: { 
-          itemStyle: { 
-            borderWidth: 2, 
-            borderColor: '#ffff00'
-          }
-        },
-        data: scatterData.map(d => ({ 
-          name: d.name, 
-          value: d.value, 
-          itemStyle: { 
-            color: getColor(d.value[2])
-          } 
-        }))
-      }
-    ]
-  }
-
-  chart.setOption(option)
-  try { chart.resize() } catch (e) {}
-}
-
-// 初始化2D世界地图
+// 初始化世界地图
 const initWorldMap = async () => {
   const mapElement = document.getElementById('worldMap')
   if (!mapElement) return
   
   try {
-    const response = await fetch('/maps/world.json')
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`)
+    // 加载并注册世界地图数据
+    if (!worldMapDataCache) {
+      const response = await fetch('/maps/world.json')
+      if (!response.ok) {
+        throw new Error(`Failed to load world map: ${response.status}`)
+      }
+      worldMapDataCache = await response.json()
+      echarts.registerMap('world', worldMapDataCache)
     }
-    const worldGeoJson = await response.json()
-    echarts.registerMap('world', worldGeoJson)
     
     const chart = getChart(mapElement)
     if (!chart) return
-    try { chart.clear() } catch (e) {}
+    
+    // 先清除之前的配置，避免残留
+    try { 
+      chart.clear() 
+      // 确保图表实例已准备好
+      await nextTick()
+    } catch (e) {
+      console.warn('清除图表时出错:', e)
+    }
 
-    const worldMapData = worldCountries.value.map(i => ({ name: i.name, value: i.value }))
-    const values = worldMapData.map(d => d.value || 0)
+    const mapData = worldCountries.value.map(i => ({ name: i.name, value: i.value }))
+    const values = mapData.map(d => d.value || 0)
     const max = Math.max(...values, 1)
 
     const option = {
@@ -829,7 +745,7 @@ const initWorldMap = async () => {
           name: geoMetric.value === 'visit' ? '访问量' : '拦截量', 
           type: 'map', 
           map: 'world', 
-          data: worldMapData, 
+          data: mapData, 
           roam: false,
           label: {
             show: false
@@ -854,11 +770,55 @@ const initWorldMap = async () => {
       ]
     }
 
-    chart.setOption(option)
-    try { chart.resize() } catch (e) {}
+    chart.setOption(option, { notMerge: true }) // 使用 notMerge 确保完全替换配置
+    try { 
+      chart.resize() 
+      // 确保渲染完成
+      await nextTick()
+    } catch (e) {
+      console.warn('调整图表大小时出错:', e)
+    }
   } catch (error) {
     console.error('加载世界地图失败:', error)
   }
+}
+
+// 省份名称映射（短名称 -> 地图数据中的全名称）
+const provinceNameMap = {
+  '北京': '北京市',
+  '天津': '天津市',
+  '上海': '上海市',
+  '重庆': '重庆市',
+  '河北': '河北省',
+  '山西': '山西省',
+  '辽宁': '辽宁省',
+  '吉林': '吉林省',
+  '黑龙江': '黑龙江省',
+  '江苏': '江苏省',
+  '浙江': '浙江省',
+  '安徽': '安徽省',
+  '福建': '福建省',
+  '江西': '江西省',
+  '山东': '山东省',
+  '河南': '河南省',
+  '湖北': '湖北省',
+  '湖南': '湖南省',
+  '广东': '广东省',
+  '海南': '海南省',
+  '四川': '四川省',
+  '贵州': '贵州省',
+  '云南': '云南省',
+  '陕西': '陕西省',
+  '甘肃': '甘肃省',
+  '青海': '青海省',
+  '台湾': '台湾省',
+  '内蒙古': '内蒙古自治区',
+  '广西': '广西壮族自治区',
+  '宁夏': '宁夏回族自治区',
+  '新疆': '新疆维吾尔自治区',
+  '西藏': '西藏自治区',
+  '香港': '香港特别行政区',
+  '澳门': '澳门特别行政区'
 }
 
 // 初始化中国地图
@@ -867,18 +827,82 @@ const initChinaMap = async () => {
   if (!mapElement) return
   
   try {
-    const response = await fetch('/maps/china.json')
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`)
+    // 如果已缓存，直接使用缓存数据
+    let chinaGeoJson = chinaMapDataCache
+    
+    if (!chinaGeoJson) {
+      // 优先从本地加载完整地图数据
+      try {
+        const response = await fetch('/maps/china.json')
+        
+        if (!response.ok) {
+          throw new Error(`本地文件加载失败: ${response.status}`)
+        }
+        
+        chinaGeoJson = await response.json()
+        
+        // 检查是否是完整的地图数据（应该有34个省级行政区）
+        const featureCount = chinaGeoJson.features?.length || 0
+        
+        // 如果本地文件不完整（少于10个省份），尝试从 CDN 加载完整版本
+        if (featureCount < 10) {
+          try {
+            const cdnResponse = await fetch('https://geo.datav.aliyun.com/areas_v3/bound/100000_full.json')
+            if (cdnResponse.ok) {
+              const cdnData = await cdnResponse.json()
+              const cdnFeatureCount = cdnData.features?.length || 0
+              if (cdnFeatureCount > featureCount) {
+                chinaGeoJson = cdnData
+              }
+            }
+          } catch (cdnError) {
+            console.warn('从 CDN 加载完整地图失败，使用本地数据:', cdnError)
+          }
+        }
+        
+        chinaMapDataCache = chinaGeoJson // 缓存数据
+      } catch (error) {
+        console.error('加载地图数据失败:', error)
+        throw error
+      }
     }
-    const chinaGeoJson = await response.json()
+    
+    // 注册地图（如果还未注册或需要更新）
     echarts.registerMap('china', chinaGeoJson)
     
     const chart = getChart(mapElement)
     if (!chart) return
-    try { chart.clear() } catch (e) {}
+    
+    // 先清除之前的配置，避免残留
+    try { 
+      chart.clear() 
+      // 确保图表实例已准备好
+      await nextTick()
+    } catch (e) {
+      console.warn('清除图表时出错:', e)
+    }
 
-    const chinaMapData = chinaProvinces.value.map(p => ({ name: p.name, value: p.value }))
+    // 从地图数据中提取所有省份名称
+    const allProvinceNames = chinaGeoJson.features.map(feature => feature.properties.name)
+    
+    // 检查地图数据是否完整（中国应该有34个省级行政区）
+    if (allProvinceNames.length < 10) {
+      console.warn('⚠️ 警告：中国地图数据不完整！当前只有', allProvinceNames.length, '个省份/地区')
+    }
+    
+    // 创建数据映射（短名称 -> 值）
+    const dataMap = new Map()
+    chinaProvinces.value.forEach(p => {
+      const fullName = provinceNameMap[p.name] || p.name
+      dataMap.set(fullName, p.value)
+    })
+    
+    // 为所有省份创建数据，如果数据列表中没有则使用0
+    const chinaMapData = allProvinceNames.map(provinceName => ({
+      name: provinceName,
+      value: dataMap.get(provinceName) || 0
+    }))
+    
     const values = chinaMapData.map(d => d.value || 0)
     const max = Math.max(...values, 1)
 
@@ -894,17 +918,19 @@ const initChinaMap = async () => {
           if (!params.data) return params.name
           return `<div style="padding: 8px;">
             <div style="font-weight: bold; color: #ff8c00; margin-bottom: 4px;">${params.data.name || params.name}</div>
-            <div style="color: #fff;">访问量: <span style="color: #4a9eff; font-weight: bold;">${formatNumber(params.data.value || 0)}</span></div>
+            <div style="color: #fff;">${geoMetric.value === 'visit' ? '访问量' : '拦截量'}: <span style="color: #4a9eff; font-weight: bold;">${formatNumber(params.data.value || 0)}</span></div>
           </div>`
         } 
       },
       visualMap: {
+        show: true,
         min: 0,
         max: Math.max(60000, max),
         left: 'left',
         top: 'bottom',
         text: ['高', '低'],
         calculable: true,
+        realtime: false,
         inRange: { 
           color: ['#1a1a2e', '#16213e', '#0f3460', '#533483', '#7209b7', '#ff8c00', '#ff6b35'] 
         },
@@ -919,40 +945,51 @@ const initChinaMap = async () => {
         borderWidth: 1,
         formatter: function (value) { 
           return value >= 1000 ? (value / 1000).toFixed(1) + 'k' : value 
-        }
+        },
+        // 确保所有值都能正确映射，包括0
+        precision: 0
       },
       series: [
         { 
-          name: '访问量', 
+          name: geoMetric.value === 'visit' ? '访问量' : '拦截量', 
           type: 'map', 
           map: 'china', 
           data: chinaMapData, 
           roam: false,
           label: {
-            show: false
+            show: true,
+            color: '#fff',
+            fontSize: 11
           },
+          // 不设置固定的 areaColor，让 visualMap 来控制颜色
           itemStyle: {
-            areaColor: '#1a1a2e',
-            borderColor: '#2a2a3e',
+            borderColor: '#4a9eff',
             borderWidth: 1.5
           },
           emphasis: { 
             itemStyle: { 
-              areaColor: '#ff8c00',
-              borderColor: '#ff6b35',
+              borderColor: '#ff8c00',
               borderWidth: 2
             },
             label: {
               show: true,
-              color: '#fff'
+              color: '#fff',
+              fontSize: 12,
+              fontWeight: 'bold'
             }
           }
         }
       ]
     }
 
-    chart.setOption(option)
-    try { chart.resize() } catch (e) {}
+    chart.setOption(option, { notMerge: true }) // 使用 notMerge 确保完全替换配置
+    try { 
+      chart.resize() 
+      // 确保渲染完成
+      await nextTick()
+    } catch (e) {
+      console.warn('调整图表大小时出错:', e)
+    }
   } catch (error) {
     console.error('加载中国地图失败:', error)
   }
@@ -1197,7 +1234,7 @@ const fetchKpiData = async () => {
 }
 
 // 初始化所有图表
-const initAllCharts = () => {
+const initAllCharts = async () => {
   initQPSChart()
   initVisitChart()
   initInterceptChart()
@@ -1205,14 +1242,10 @@ const initAllCharts = () => {
   initPerformanceChart()
   
   // 初始化地图
-  if (geoView.value === '3d') {
-    initGlobe()
+  if (geoScope.value === 'world') {
+    await initWorldMap()
   } else {
-    if (geoScope.value === 'world') {
-      initWorldMap()
-    } else {
-      initChinaMap()
-    }
+    await initChinaMap()
   }
 }
 
@@ -1244,6 +1277,24 @@ watch(useMockData, async (newValue) => {
   initAllCharts()
 })
 
+// 监听地理位置视图变化，重新初始化地图
+watch([geoScope, geoMetric], async (newVal, oldVal) => {
+  // 避免初始化时的重复调用
+  if (oldVal === undefined) return
+  
+  await nextTick()
+  
+  try {
+    if (geoScope.value === 'world') {
+      await initWorldMap()
+    } else {
+      await initChinaMap()
+    }
+  } catch (error) {
+    console.error('切换地图时出错:', error)
+  }
+}, { flush: 'post' }) // 使用 post 确保 DOM 更新后再执行
+
 onUnmounted(() => {
   stopQpsAutoRefresh()
   chartInstances.forEach((c) => {
@@ -1264,7 +1315,8 @@ onUnmounted(() => {
 /* KPI指标卡片 */
 .kpi-section {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  /* grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); */
+  grid-template-columns: repeat(6, 1fr);
   gap: 20px;
   margin-bottom: 20px;
 }
@@ -1340,16 +1392,20 @@ onUnmounted(() => {
   gap: 24px;
   margin-bottom: 24px;
   align-items: flex-start;
+  height: 1200px;
 }
 
 .panel.geo-panel {
   flex: 2;
   min-width: 60%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
 }
 
 .right-charts-area {
   flex: 1;
-  min-width: 35%;
+  min-width: 30%;
   display: flex;
   flex-direction: column;
   gap: 20px;
@@ -1358,6 +1414,9 @@ onUnmounted(() => {
 .panel.qps-panel,
 .panel.status-panel {
   width: 100%;
+  height: 390px;
+  display: flex;
+  flex-direction: column;
 }
 
 @media (max-width: 1200px) {
@@ -1459,16 +1518,21 @@ onUnmounted(() => {
 }
 
 .map-container {
-  height: 900px;
-  min-height: 850px;
+  flex: 1;
+  min-height: 0;
   border-radius: 8px;
   overflow: hidden;
   box-shadow: inset 0 2px 8px rgba(0,0,0,0.3);
   background: radial-gradient(circle at center, rgba(74,158,255,0.05) 0%, transparent 70%);
   position: relative;
+  display: flex;
+  width: 100%;
 }
 
-.world-map, .globe {
+.world-map {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
   width: 100%;
   height: 100%;
   border-radius: 8px;
@@ -1478,13 +1542,17 @@ onUnmounted(() => {
 }
 
 .country-list {
-  max-height: 400px;
+  flex: 0 0 auto;
+  max-height: 300px;
   overflow-y: auto;
   margin-top: 16px;
   padding: 12px;
   background: rgba(0,0,0,0.2);
   border-radius: 8px;
   border: 1px solid rgba(74,158,255,0.2);
+  display: flex;
+  flex-direction: column;
+  width: 100%;
 }
 
 .country-item {
@@ -1594,7 +1662,11 @@ onUnmounted(() => {
 }
 
 .chart-container {
-  height: 800px;
+  flex: 1;
+  min-height: 0;
+  height: auto;
+  display: flex;
+  width: 100%;
 }
 
 
