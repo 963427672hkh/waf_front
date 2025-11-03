@@ -32,6 +32,20 @@
         >
           监控大屏
         </button>
+        <button 
+          class="nav-link" 
+          :class="{ active: currentPage === 'alert' }"
+          @click="switchPage('alert')"
+        >
+          告警管理
+        </button>
+        <button 
+          class="nav-link" 
+          :class="{ active: currentPage === 'rules' }"
+          @click="switchPage('rules')"
+        >
+          规则配置
+        </button>
       </nav>
       <div class="header-controls">
         <div class="user-info" v-if="isAuthenticated">
@@ -73,6 +87,8 @@
       <SecurityStatus v-if="currentPage === 'security'" />
       <ProtectionReport v-if="currentPage === 'report'" />
       <WafDashboard v-if="currentPage === 'waf'" />
+      <AlertManagement v-if="currentPage === 'alert'" />
+      <RuleManagement v-if="currentPage === 'rules'" />
     </div>
   </div>
 </template>
@@ -83,6 +99,8 @@ import TrafficAnalysis from '../components/TrafficAnalysis.vue'
 import SecurityStatus from '../components/SecurityStatus.vue'
 import ProtectionReport from '../components/ProtectionReport.vue'
 import WafDashboard from '../components/WafDashboard.vue'
+import AlertManagement from '../components/AlertManagement.vue'
+import RuleManagement from '../components/RuleManagement.vue'
 import { useDashboard } from '../composables/useDashboard'
 import { useAuth } from '../composables/useAuth'
 
@@ -92,7 +110,9 @@ export default {
     TrafficAnalysis,
     SecurityStatus,
     ProtectionReport,
-    WafDashboard
+    WafDashboard,
+    AlertManagement,
+    RuleManagement
   },
   setup() {
     const { 
