@@ -23,6 +23,7 @@ yarn-error.log*
 
 # Vite
 .vite
+node_modules/.vite/
 *.local
 
 # IDE

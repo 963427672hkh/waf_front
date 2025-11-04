@@ -46,17 +46,40 @@ export const trafficAPI = {
   // KPI数据 - 使用访问日志统计
   getKPIData: (params = {}) => api.get('/logs/access/stats', { params }),
   
-  // 地理位置数据 - 使用热门IP数据
-  getGeoData: (params = {}) => api.get('/logs/access/top-ips', { params }),
+  // 地理位置数据 - 使用仪表板地理位置接口
+  getGeoData: (params = {}) => api.get('/dashboard/geo', { params }),
   
-  // QPS数据 - 使用日志统计
-  getQPSData: (params = {}) => api.get('/logs/stats', { params: { ...params, metric: 'count' } }),
+  // 获取地理位置数据（支持访问和拦截类型）
+  // type: 'visit' | 'intercept' | undefined (全部)
+  // scope: 'world' | 'china' | undefined (世界)
+  getGeoLocationData: (params = {}) => {
+    const { type, scope, timeRange = '24h', ...otherParams } = params
+    const queryParams = { timeRange, ...otherParams }
+    
+    // 如果指定了类型，添加type参数
+    if (type) {
+      queryParams.type = type
+    }
+    
+    // 如果指定了范围，添加scope参数
+    if (scope) {
+      queryParams.scope = scope
+    }
+    
+    // 打印请求信息到控制台（简洁版）
+    console.log(`[地理位置API] ${scope || 'world'}-${type || 'all'}:`, queryParams)
+    
+    return api.get('/dashboard/geo', { params: queryParams })
+  },
   
-  // 访问情况 - 使用访问日志统计
-  getVisitData: (params = {}) => api.get('/logs/access/stats', { params }),
+  // QPS数据 - 使用仪表板QPS接口
+  getQPSData: (params = {}) => api.get('/dashboard/qps', { params }),
   
-  // 拦截情况 - 使用WAF日志统计
-  getInterceptData: (params = {}) => api.get('/logs/waf/stats', { params }),
+  // 访问趋势数据 - 使用仪表板访问接口
+  getVisitData: (params = {}) => api.get('/dashboard/visit', { params }),
+  
+  // 拦截趋势数据 - 使用仪表板拦截接口
+  getInterceptData: (params = {}) => api.get('/dashboard/intercept', { params }),
   
   // 攻击类型分布 - 使用日志摘要
   getAttackTypeData: (params = {}) => api.get('/logs/stats/summary', { params }),
