@@ -12,19 +12,31 @@ let chart: echarts.ECharts | null = null
 
 // 攻击类型颜色映射
 const getAttackColor = (type: string) => {
+  const t = (type || '').toLowerCase()
   const colors: { [key: string]: string } = {
-    '目录穿越': '#4a9eff',
-    '后门': '#ff8c00',
-    '信息泄露': '#52c41a',
-    '文件包含': '#722ed1',
-    '命令注入': '#1890ff',
-    'SQL注入': '#ff4d4f',
-    'XSS': '#faad14',
-    'CSRF': '#13c2c2'
-  }
-  return colors[type] || '#666'
-}
+    // 英文后端命名
+    'xss': '#faad14',
+    'sqli': '#ff4d4f',
+    'rce': '#ff8c00',
+    'lfi': '#722ed1',
+    'csrf': '#13c2c2',
+    'directory_traversal': '#1890ff',
+    'dir_traversal': '#1890ff',
 
+    // 中文命名兼容
+    'xss攻击': '#faad14',
+    'sql注入': '#ff4d4f',
+    '命令注入': '#ff8c00',
+    '文件包含': '#722ed1',
+    'csrf攻击': '#13c2c2',
+    '目录遍历': '#1890ff',
+    '目录穿越': '#1890ff',
+    '后门': '#ff8c00',
+    '信息泄露': '#52c41a'
+  }
+  return colors[t] || colors[type] || '#666'
+}
+  
 onMounted(async () => {
   await nextTick()
   if (chartRef.value) {
