@@ -19,6 +19,9 @@ export const trafficAPI = {
   
   // 4. WAF日志统计
   getWafStats: (params = {}) => api.get('/logs/waf/stats', { params }),
+
+   // 4.1 实时日志流
+  getRealtimeLogs: (params = {}) => api.get('/logs/realtime', { params }),
   
   // 5. 日志统计信息（用于QPS、时间趋势等）
   getLogsStats: (params = {}) => api.get('/logs/stats', { params }),
