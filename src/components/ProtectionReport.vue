@@ -19,6 +19,7 @@
             required
             @input="handleSearch"
             @focus="showSearchResults = true"
+            @blur="onSearchBlur"
           >
           <label>报告名称</label>
           <div class="match-results" v-show="showSearchResults && filteredReports.length > 0">
@@ -32,8 +33,9 @@
             </div>
           </div>
         </div>
-        <button class="login-get" @click="openGenerateModal">
-          <i class="fas fa-plus"></i> 立即生成
+        <button class="login-get" @click="openGenerateModal" :disabled="generating">
+          <i class="fas fa-plus" :class="{ 'fa-spin': generating }"></i> 
+          {{ generating ? '生成中...' : '立即生成' }}
         </button>
       </div>
     </div>
@@ -93,6 +95,7 @@
               class="form-control" 
               placeholder="请输入报告名称" 
               required
+              :disabled="generating"
             >
           </div>
           <div class="date-group">
@@ -104,6 +107,7 @@
                 v-model="newReport.startDate"
                 class="form-control" 
                 required
+                :disabled="generating"
               >
             </div>
             <div class="form-group">
@@ -114,12 +118,16 @@
                 v-model="newReport.endDate"
                 class="form-control" 
                 required
+                :disabled="generating"
               >
             </div>
           </div>
           <div class="modal-footer">
-            <button type="button" class="btn-cancel" @click="closeGenerateModal">取消</button>
-            <button type="submit" class="btn-submit">生成报告</button>
+            <button type="button" class="btn-cancel" @click="closeGenerateModal" :disabled="generating">取消</button>
+            <button type="submit" class="btn-submit" :disabled="generating">
+              <i class="fas fa-spinner fa-spin" v-if="generating"></i>
+              {{ generating ? '生成中...' : '生成报告' }}
+            </button>
           </div>
         </form>
       </div>
@@ -128,10 +136,12 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, computed } from 'vue'
+import reportService from '@api/report.js';
 
+import { computed, onMounted, reactive, ref } from 'vue';
 // 响应式数据
 const loading = ref(false)
+const generating = ref(false)
 const status = ref('就绪')
 const reports = ref([])
 const searchQuery = ref('')
@@ -144,34 +154,6 @@ const newReport = reactive({
   startDate: '',
   endDate: ''
 })
-
-// 模拟报告数据
-const mockReports = [
-  {
-    id: 1,
-    title: "应用防护周报 2025-09-22",
-    createTime: "2025-09-22T10:30:00",
-    pdfUrl: "/reports/2025-09-22.pdf"
-  },
-  {
-    id: 2,
-    title: "系统安全周报 2025-09-15",
-    createTime: "2025-09-15T14:20:00",
-    pdfUrl: "/reports/2025-09-15.pdf"
-  },
-  {
-    id: 3,
-    title: "网络监控周报 2025-09-08",
-    createTime: "2025-09-08T09:15:00",
-    pdfUrl: "/reports/2025-09-08.pdf"
-  },
-  {
-    id: 4,
-    title: "123 2025-09-28",
-    createTime: "2025-09-08T09:15:00",
-    pdfUrl: "/reports/123.pdf"
-  }
-]
 
 // 计算属性 - 过滤后的报告
 const filteredReports = computed(() => {
@@ -200,22 +182,13 @@ const loadReports = async () => {
   status.value = '加载中...'
   
   try {
-    // 模拟API调用延迟
-    await new Promise(resolve => setTimeout(resolve, 800))
-    
-    // 在实际应用中，这里应该是真实的API调用
-    // const response = await fetch('/api/weekly-reports')
-    // const data = await response.json()
-    
-    reports.value = [...mockReports]
+    reports.value = await reportService.loadReports()
     status.value = `已加载 ${reports.value.length} 条报告`
-    
-    // 记录到日志（模拟）
-    console.log('报告加载完成，数量:', reports.value.length)
-    
   } catch (error) {
     status.value = '加载失败'
     console.error('加载报告失败:', error)
+    // 在实际应用中，这里可以显示更友好的错误提示
+    alert('加载报告失败，请重试')
   } finally {
     loading.value = false
   }
@@ -226,6 +199,14 @@ const handleSearch = () => {
   showSearchResults.value = searchQuery.value.trim().length > 0
 }
 
+// 搜索框失去焦点处理
+const onSearchBlur = () => {
+  // 延迟隐藏搜索结果，以便点击选项
+  setTimeout(() => {
+    showSearchResults.value = false
+  }, 200)
+}
+
 // 选择报告
 const selectReport = (title) => {
   searchQuery.value = title
@@ -234,25 +215,12 @@ const selectReport = (title) => {
 
 // 预览功能
 const preview = (pdfUrl) => {
-  // 记录预览操作到日志
-  console.log('预览报告:', pdfUrl)
-  
-  // 在新窗口中打开PDF
-  window.open(pdfUrl, '_blank')
+  reportService.previewReport(pdfUrl)
 }
 
 // 下载PDF功能
 const downloadPdf = (pdfUrl, title) => {
-  // 记录下载操作到日志
-  console.log('下载报告:', pdfUrl, title)
-  
-  // 创建下载链接
-  const a = document.createElement('a')
-  a.href = pdfUrl
-  a.download = title + '.pdf'
-  document.body.appendChild(a)
-  a.click()
-  document.body.removeChild(a)
+  reportService.downloadReport(pdfUrl, title)
 }
 
 // 打开生成报告弹窗
@@ -270,52 +238,51 @@ const openGenerateModal = () => {
 
 // 关闭生成报告弹窗
 const closeGenerateModal = () => {
-  showModal.value = false
-  newReport.name = ''
-  newReport.startDate = ''
-  newReport.endDate = ''
+  if (!generating.value) {
+    showModal.value = false
+    newReport.name = ''
+    newReport.startDate = ''
+    newReport.endDate = ''
+  }
 }
 
 // 点击弹窗外部关闭
 const closeModalOnBackdrop = (event) => {
-  if (event.target === event.currentTarget) {
+  if (event.target === event.currentTarget && !generating.value) {
     closeGenerateModal()
   }
 }
 
 // 处理表单提交
-const handleGenerate = () => {
-  const { name, startDate, endDate } = newReport
-  
-  if (!name.trim()) {
-    alert('请输入报告名称')
+const handleGenerate = async () => {
+  const validation = reportService.validateReportData(newReport)
+  if (!validation.isValid) {
+    alert(validation.message)
     return
   }
   
-  if (!startDate || !endDate) {
-    alert('请选择开始时间和结束时间')
-    return
-  }
-  
-  if (new Date(endDate) < new Date(startDate)) {
-    alert('结束时间不能早于开始时间')
-    return
-  }
-  
-  // 检查是否与现有报告名称重复
-  const isDuplicate = reports.value.some(report => report.title === name.trim())
-  
-  if (isDuplicate) {
+  if (reportService.isDuplicateReportName(newReport.name, reports.value)) {
     alert('报告名称已存在，请使用其他名称')
     return
   }
   
-  // 记录生成操作到日志
-  console.log('生成报告:', name, startDate, endDate)
+  generating.value = true
   
-  alert(`生成报告: ${name}\n开始时间: ${startDate}\n结束时间: ${endDate}\n\n在实际应用中，这里会开始生成新的报告。`)
-  
-  closeGenerateModal()
+  try {
+    const result = await reportService.generateReport(newReport)
+    
+    alert(`报告 "${result.title}" 生成成功！`)
+    
+    // 重新加载报告列表以显示新报告
+    await loadReports()
+    closeGenerateModal()
+    
+  } catch (error) {
+    console.error('生成报告失败:', error)
+    alert('生成报告失败，请重试')
+  } finally {
+    generating.value = false
+  }
 }
 
 // 组件挂载时自动加载数据
