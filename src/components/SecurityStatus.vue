@@ -69,49 +69,47 @@
         <div class="panel">
           <div class="panel-header">
             <h3 class="panel-title">攻击防护趋势</h3>
+            <dv-decoration-3 style="width:100%;height:3px;margin-top:8px;"/>
           </div>
-          <div class="chart-container">
-            <AttackTrendChart :data="attackTrend" />
-          </div>
+          <dv-border-box-8 class="border-wrapper">
+            <div class="chart-container">
+              <AttackTrendChart :data="attackTrend" />
+            </div>
+          </dv-border-box-8>
         </div>
 
-        <!-- 攻击源IP表格 -->
+        <!-- 攻击源IP（基于拦截趋势接口） -->
         <div class="panel">
           <div class="panel-header">
             <h3 class="panel-title">攻击源IP</h3>
-            <a href="#" class="view-more">查看更多</a>
+            <dv-decoration-3 style="width:100%;height:3px;margin-top:8px;"/>
           </div>
-          <div class="table-container">
-            <div v-for="(item, index) in attackSourceIPs" :key="index" class="table-item">
-              <span class="ip-address">{{ item.ip }}</span>
-              <span class="ip-count">{{ formatNumber(item.count) }}</span>
+          <dv-border-box-8 class="border-wrapper">
+            <div class="table-container">
+              <div v-for="(item, index) in attackInterceptIPs" :key="index" class="table-item">
+                <span class="ip-address">{{ item.ip }}</span>
+                <span class="ip-count">{{ formatNumber(item.count) }}</span>
+              </div>
             </div>
-          </div>
+          </dv-border-box-8>
         </div>
+
+        
 
         <!-- 黑白名单趋势 -->
         <div class="panel">
           <div class="panel-header">
             <h3 class="panel-title">黑白名单趋势</h3>
+            <dv-decoration-3 style="width:100%;height:3px;margin-top:8px;"/>
           </div>
-          <div class="chart-container">
-            <BlackWhiteTrend :data="blackWhiteTrend" />
-          </div>
+          <dv-border-box-8 class="border-wrapper">
+            <div class="chart-container">
+              <BlackWhiteTrend :data="blackWhiteTrend" />
+            </div>
+          </dv-border-box-8>
         </div>
 
-        <!-- 攻击源IP表格2 -->
-        <div class="panel">
-          <div class="panel-header">
-            <h3 class="panel-title">攻击源IP</h3>
-            <a href="#" class="view-more">查看更多</a>
-          </div>
-          <div class="table-container">
-            <div v-for="(item, index) in attackSourceIPs2" :key="index" class="table-item">
-              <span class="ip-address">{{ item.ip }}</span>
-              <span class="ip-count">{{ formatNumber(item.count) }}</span>
-            </div>
-          </div>
-        </div>
+        
       </div>
 
       <!-- 右侧列 -->
@@ -166,25 +164,7 @@
 
     <!-- 扩展区域 -->
     <div class="extended-section">
-      <!-- 安全事件统计 -->
-      <div class="panel security-events-panel">
-        <div class="panel-header">
-          <h3 class="panel-title">安全事件统计</h3>
-        </div>
-        <div class="security-events-chart">
-          <div id="securityEventsChart" style="height: 100%; width: 100%;"></div>
-        </div>
-      </div>
-
-      <!-- 威胁等级分布 -->
-      <div class="panel threat-level-panel">
-        <div class="panel-header">
-          <h3 class="panel-title">威胁等级分布</h3>
-        </div>
-        <div class="threat-level-chart">
-          <div id="threatLevelChart" style="height: 100%; width: 100%;"></div>
-        </div>
-      </div>
+      
 
       <!-- 防护规则状态 -->
       <div class="panel protection-rules-panel">
@@ -233,25 +213,21 @@
         </div>
       </div>
 
-      <!-- 最近攻击趋势 -->
-      <div class="panel recent-attacks-panel">
-        <div class="panel-header">
-          <h3 class="panel-title">最近攻击趋势</h3>
-        </div>
-        <div class="recent-attacks-chart">
-          <div id="recentAttacksChart" style="height: 100%; width: 100%;"></div>
-        </div>
-      </div>
+      
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+// 已移除最近攻击趋势图表的ECharts依赖
 import axios from 'axios'
+// 使用聚合 API 客户端（带鉴权与代理），接入拦截趋势与热门IP
+import { trafficAPI } from '../api/index.js'
 import AttackTrendChart from './dashboard/AttackTrendChart.vue'
 import AttackTypePie from './dashboard/AttackTypePie.vue'
 import BlackWhiteTrend from './dashboard/BlackWhiteTrend.vue'
+import { securityAPI } from '../api/securityAPI.js'
 
 // 加载状态
 const loading = ref(true)
@@ -290,22 +266,37 @@ const blackWhiteTrend = ref([
   { timestamp: '16:00', blacklist: 38, whitelist: 16 }
 ])
 
-// 攻击源IP数据
-const attackSourceIPs = ref([
-  { ip: '47.242.104.253', count: 146 },
-  { ip: '101.132.120.240', count: 141 },
-  { ip: '123.57.185.163', count: 134 },
-  { ip: '116.62.147.32', count: 128 },
-  { ip: '101.200.212.185', count: 92 }
-])
+// 已移除：攻击源IP列表（按要求不展示该栏）
 
-const attackSourceIPs2 = ref([
-  { ip: '120.26.132.13', count: 1800 },
-  { ip: '134.122.174.156', count: 5 },
-  { ip: '58.218.211.150', count: 2 },
-  { ip: '58.218.211.127', count: 2 },
-  { ip: '58.218.211.239', count: 2 }
-])
+// 攻击源IP（来源于拦截趋势接口的可能字段，若无则回退安全接口）
+const attackInterceptIPs = ref<{ ip: string; count: number }[]>([])
+
+// 归一化后端IP列表到 {ip, count}[]
+const normalizeIpList = (raw: any): { ip: string; count: number }[] => {
+  if (!raw) return []
+  // 数组情况
+  if (Array.isArray(raw)) {
+    if (raw.length === 0) return []
+    // 字符串数组，如 ['1.2.3.4', '5.6.7.8']
+    if (typeof raw[0] === 'string') {
+      return raw.map((ip: string) => ({ ip, count: 0 }))
+    }
+    // 对象数组，如 [{ip:'1.2.3.4', count:10}, {address:'5.6.7.8', blockedCount:2}]
+    return raw
+      .map((r: any) => ({
+        ip: r?.ip || r?.address || r?.source || r?.src,
+        count: Number(r?.count ?? r?.blockedCount ?? r?.value ?? r?.num ?? 0) || 0
+      }))
+      .filter((x: any) => !!x.ip)
+  }
+  // 键值对象，如 { '1.2.3.4': 10, '5.6.7.8': 2 }
+  if (typeof raw === 'object') {
+    return Object.entries(raw)
+      .map(([ip, count]) => ({ ip, count: Number(count) || 0 }))
+      .filter(v => !!v.ip)
+  }
+  return []
+}
 
 // 实时事件数据
 const realTimeEvents = ref([
@@ -331,22 +322,7 @@ const blackWhiteRules = ref([
   { name: '对内网 IP 加白', count: 2 }
 ])
 
-// 安全事件统计数据
-const securityEventsData = ref([
-  { name: 'SQL注入', value: 45 },
-  { name: 'XSS攻击', value: 32 },
-  { name: 'CSRF攻击', value: 18 },
-  { name: '文件上传', value: 12 },
-  { name: '目录遍历', value: 8 }
-])
-
-// 威胁等级分布数据
-const threatLevelData = ref([
-  { name: '高危', value: 15, color: '#ff4d4f' },
-  { name: '中危', value: 28, color: '#ff8c00' },
-  { name: '低危', value: 42, color: '#52c41a' },
-  { name: '信息', value: 8, color: '#1890ff' }
-])
+// 已移除：安全事件统计、威胁等级分布模块及其数据
 
 // 防护规则状态数据
 const protectionRules = ref([
@@ -364,30 +340,33 @@ const protectionCoverage = ref(92)
 const responseTime = ref(120)
 const threatDetectionRate = ref(96)
 
-// 最近攻击趋势数据
-const recentAttacksData = ref([
-  { time: '00:00', count: 5 },
-  { time: '04:00', count: 3 },
-  { time: '08:00', count: 12 },
-  { time: '12:00', count: 18 },
-  { time: '16:00', count: 25 },
-  { time: '20:00', count: 15 },
-  { time: '24:00', count: 8 }
-])
+// 已移除：最近攻击趋势图表的数据与渲染逻辑
 
-// 获取攻击类型颜色
+// 获取攻击类型颜色（兼容中英文与不同命名）
 const getAttackColor = (type: string) => {
+  const t = (type || '').toLowerCase()
   const colors: { [key: string]: string } = {
-    'XSS攻击': '#4a9eff',
-    'SQL注入': '#ff8c00',
-    '命令注入': '#52c41a',
+    // 英文后端命名
+    'xss': '#faad14',
+    'sqli': '#ff4d4f',
+    'rce': '#ff8c00',
+    'lfi': '#722ed1',
+    'csrf': '#13c2c2',
+    'directory_traversal': '#1890ff',
+    'dir_traversal': '#1890ff',
+
+    // 中文命名兼容
+    'xss攻击': '#faad14',
+    'sql注入': '#ff4d4f',
+    '命令注入': '#ff8c00',
     '文件包含': '#722ed1',
+    'csrf攻击': '#13c2c2',
     '目录遍历': '#1890ff',
-    '目录穿越': '#4a9eff',
+    '目录穿越': '#1890ff',
     '后门': '#ff8c00',
     '信息泄露': '#52c41a'
   }
-  return colors[type] || '#666'
+  return colors[t] || colors[type] || '#666'
 }
 
 // 格式化数字
@@ -440,12 +419,7 @@ const updateFromBackendData = (statsData: any, securityData: any) => {
     { type: '目录遍历', count: statsData.security_events?.dir_traversal_attempts || 0 }
   ]
 
-  // 更新威胁等级分布
-  threatLevelData.value = [
-    { name: '高危', value: statsData.security_events?.high_severity || 0, color: '#ff4d4f' },
-    { name: '中危', value: statsData.security_events?.medium_severity || 0, color: '#ff8c00' },
-    { name: '低危', value: statsData.security_events?.low_severity || 0, color: '#52c41a' }
-  ]
+  // 已移除：威胁等级分布的更新逻辑
 
   // 更新防护规则状态
   protectionRules.value = [
@@ -491,8 +465,104 @@ const loadData = async () => {
       
       // 使用后端数据更新前端展示
       updateFromBackendData(statsData, securityData)
-      
+
+      // 接入拦截趋势（24小时）
+      try {
+        const interceptRes = await trafficAPI.getInterceptData({ timeRange: '24h' })
+        const interceptData = interceptRes?.data?.data || {}
+        const trend = Array.isArray(interceptData?.data) ? interceptData.data : []
+        attackTrend.value = trend.map(item => ({
+          timestamp: item.time,
+          count: Number(item.value) || 0
+        }))
+
+        // 攻击源IP不从拦截趋势数据解析，改为在WAF统计中获取
+      } catch (e) {
+        console.warn('加载拦截趋势失败，保留现有数据', e)
+      }
+
+      // 已移除：热门访问IP（access/top-ips）加载逻辑，现基于拦截/安全接口提供攻击IP
+
+      // Web攻击分布（WAF统计24h）
+      try {
+        const end = new Date()
+        const start = new Date(end.getTime() - 24 * 60 * 60 * 1000)
+        const wafRes = await trafficAPI.getWafStats({
+          startTime: start.toISOString(),
+          endTime: end.toISOString()
+        })
+        const wafData = wafRes?.data?.data || {}
+        const topAttacks = Array.isArray(wafData?.topAttacks) ? wafData.topAttacks : []
+        webAttackDistribution.value = topAttacks.map(a => ({ type: a.type, count: Number(a.count) || 0 }))
+
+        // 攻击源IP：优先使用WAF统计中的IP列表，保持与攻击防护趋势数据时间范围一致
+        try {
+          const rawIps = Array.isArray(wafData?.topIps) ? wafData.topIps
+            : (Array.isArray(wafData?.attackIps) ? wafData.attackIps : null)
+          let ipList = normalizeIpList(rawIps)
+          if (ipList.length === 0) {
+            // 回退到安全接口提供的攻击源IP
+            const secRes = await securityAPI.getAttackSourceIPs({ timeRange: '24h', limit: 10 })
+            const secData = secRes?.data?.data
+            ipList = normalizeIpList(secData)
+          }
+          attackInterceptIPs.value = ipList
+            .sort((a, b) => (b.count || 0) - (a.count || 0))
+            .slice(0, 10)
+        } catch (e) {
+          console.warn('设置攻击源IP失败，保留现有数据', e)
+        }
+      } catch (e) {
+        console.warn('加载Web攻击分布失败，保留现有数据', e)
+      }
+
+      // 黑白名单趋势（24h）
+      try {
+        const bwRes = await securityAPI.getBlackWhiteTrend({ timeRange: '24h' })
+        const bwArr = Array.isArray(bwRes?.data?.data) ? bwRes.data.data : []
+        blackWhiteTrend.value = bwArr.map(d => ({
+          timestamp: d.time || d.timestamp,
+          blacklist: Number(d.blacklist ?? d.black) || 0,
+          whitelist: Number(d.whitelist ?? d.white) || 0
+        }))
+      } catch (e) {
+        console.warn('加载黑白名单趋势失败，保留现有数据', e)
+      }
+
+      // 实时事件（合并WAF与访问日志）
+      try {
+        const realRes = await trafficAPI.getRealtimeLogs()
+        const wafLogs = Array.isArray(realRes?.data?.data?.waf) ? realRes.data.data.waf : []
+        const accessLogs = Array.isArray(realRes?.data?.data?.access) ? realRes.data.data.access : []
+        const wafEvents = wafLogs.slice(0, 5).map(l => ({
+          type: 'waf',
+          typeName: 'WAF审计',
+          content: `${l.method} ${l.uri} ${l.action}${l.ruleId ? ' #' + l.ruleId : ''}`,
+          time: new Date(l.time).toLocaleTimeString('zh-CN', { hour12: false })
+        }))
+        const accessEvents = accessLogs.slice(0, 5).map(l => ({
+          type: 'access',
+          typeName: '访问日志',
+          content: `${l.method} ${l.uri} ${l.status}`,
+          time: new Date(l.time).toLocaleTimeString('zh-CN', { hour12: false })
+        }))
+        realTimeEvents.value = [...wafEvents, ...accessEvents].slice(0, 5)
+      } catch (e) {
+        console.warn('加载实时事件失败，保留现有数据', e)
+      }
+
       console.log('成功加载后端数据')
+      // 加载性能指标用于响应时间
+      try {
+        const perfRes = await trafficAPI.getPerformanceData()
+        const perf = perfRes?.data?.data || {}
+        const avg = Number(perf.avg_response_time ?? perf.response_time)
+        if (!Number.isNaN(avg) && avg > 0) {
+          responseTime.value = Math.floor(avg)
+        }
+      } catch (e) {
+        console.warn('加载性能指标失败，保留现有响应时间', e)
+      }
     } catch (apiError) {
       console.warn('API调用失败，使用模拟数据:', apiError)
       // API失败时使用模拟数据
@@ -523,7 +593,8 @@ const updateMockData = () => {
   // 不再随机调整安全评分，因为现在使用真实数据
 }
 
-onMounted(() => {
+onMounted(async () => {
+  // 初始化加载后端数据（已移除最近攻击趋势图表初始化）
   loadData()
 })
 </script>
@@ -690,6 +761,11 @@ onMounted(() => {
 /* 图表容器 */
 .chart-container {
   height: 300px;
+}
+
+/* DataV 边框容器适配 */
+.border-wrapper {
+  padding: 8px;
 }
 
 /* 表格样式 */
