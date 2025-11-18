@@ -27,5 +27,5 @@ export const validateReportData = ({ name, startDate, endDate }) => {
 export const isDuplicateReportName = (name, list) =>
     list.some(r => r.title === name.trim());
 
-export default reportAPI
+export default reportService
 

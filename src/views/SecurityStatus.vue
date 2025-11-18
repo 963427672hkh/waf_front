@@ -69,29 +69,29 @@
         <div class="panel">
           <div class="panel-header">
             <h3 class="panel-title">攻击防护趋势</h3>
-            <dv-decoration-3 style="width:100%;height:3px;margin-top:8px;"/>
+            <div class="decoration-line"></div>
           </div>
-          <dv-border-box-8 class="border-wrapper">
+          <div class="border-wrapper">
             <div class="chart-container">
               <AttackTrendChart :data="attackTrend" />
             </div>
-          </dv-border-box-8>
+          </div>
         </div>
 
         <!-- 攻击源IP（基于拦截趋势接口） -->
         <div class="panel">
           <div class="panel-header">
             <h3 class="panel-title">攻击源IP</h3>
-            <dv-decoration-3 style="width:100%;height:3px;margin-top:8px;"/>
+            <div class="decoration-line"></div>
           </div>
-          <dv-border-box-8 class="border-wrapper">
+          <div class="border-wrapper">
             <div class="table-container">
               <div v-for="(item, index) in attackInterceptIPs" :key="index" class="table-item">
                 <span class="ip-address">{{ item.ip }}</span>
                 <span class="ip-count">{{ formatNumber(item.count) }}</span>
               </div>
             </div>
-          </dv-border-box-8>
+          </div>
         </div>
 
         
@@ -100,13 +100,13 @@
         <div class="panel">
           <div class="panel-header">
             <h3 class="panel-title">黑白名单趋势</h3>
-            <dv-decoration-3 style="width:100%;height:3px;margin-top:8px;"/>
+            <div class="decoration-line"></div>
           </div>
-          <dv-border-box-8 class="border-wrapper">
+          <div class="border-wrapper">
             <div class="chart-container">
               <BlackWhiteTrend :data="blackWhiteTrend" />
             </div>
-          </dv-border-box-8>
+          </div>
         </div>
 
         
@@ -224,9 +224,9 @@ import { ref, onMounted } from 'vue'
 import axios from 'axios'
 // 使用聚合 API 客户端（带鉴权与代理），接入拦截趋势与热门IP
 import { trafficAPI } from '../api/index.js'
-import AttackTrendChart from './dashboard/AttackTrendChart.vue'
-import AttackTypePie from './dashboard/AttackTypePie.vue'
-import BlackWhiteTrend from './dashboard/BlackWhiteTrend.vue'
+import AttackTrendChart from '../components/dashboard/AttackTrendChart.vue'
+import AttackTypePie from '../components/dashboard/AttackTypePie.vue'
+import BlackWhiteTrend from '../components/dashboard/BlackWhiteTrend.vue'
 import { securityAPI } from '../api/securityAPI.js'
 
 // 加载状态
@@ -442,7 +442,6 @@ const updateFromBackendData = (statsData: any, securityData: any) => {
   responseTime.value = 120 // 暂时保留模拟数据
   threatDetectionRate.value = Math.floor(blockRate * 10) // 基于拦截率估算
 
-  console.log('成功使用后端数据更新前端展示')
 }
 
 // 数据加载函数
@@ -551,7 +550,6 @@ const loadData = async () => {
         console.warn('加载实时事件失败，保留现有数据', e)
       }
 
-      console.log('成功加载后端数据')
       // 加载性能指标用于响应时间
       try {
         const perfRes = await trafficAPI.getPerformanceData()
@@ -764,6 +762,42 @@ onMounted(async () => {
 }
 
 /* DataV 边框容器适配 */
+.decoration-line {
+  width: 100%;
+  height: 3px;
+  margin-top: 8px;
+  background: linear-gradient(90deg, 
+    rgba(74, 158, 255, 0.8) 0%, 
+    rgba(74, 158, 255, 0.4) 50%, 
+    rgba(74, 158, 255, 0.8) 100%);
+  border-radius: 2px;
+  position: relative;
+  overflow: hidden;
+}
+
+.decoration-line::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, 
+    transparent 0%, 
+    rgba(255, 255, 255, 0.3) 50%, 
+    transparent 100%);
+  animation: shimmer 2s infinite;
+}
+
+@keyframes shimmer {
+  0% {
+    left: -100%;
+  }
+  100% {
+    left: 100%;
+  }
+}
+
 .border-wrapper {
   padding: 8px;
 }

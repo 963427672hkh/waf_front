@@ -81,6 +81,7 @@ export function useAuth() {
     }
   }
 
+  
   // 游客登录
   const guestLogin = async () => {
     loading.value = true
@@ -182,13 +183,15 @@ export function useAuth() {
   // 设置自动刷新令牌
   const setupTokenRefresh = (expiresIn) => {
     // 清除现有定时器
+  // const setupTokenRefresh = () => {  //测试使用
     if (refreshTimer) {
       clearTimeout(refreshTimer)
     }
     
     // 在令牌过期前5分钟刷新
     const refreshTime = (expiresIn - 300) * 1000 // 转换为毫秒
-    
+    // const refreshTime = 20000 //测试使用
+
     if (refreshTime > 0) {
       refreshTimer = setTimeout(async () => {
         console.log('自动刷新令牌...')
@@ -255,6 +258,7 @@ export function useAuth() {
     handleTokenRefresh,
     checkUsername,
     initAuth,
-    clearAuth
+    clearAuth,
+    setupTokenRefresh
   }
 }

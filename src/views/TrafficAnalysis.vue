@@ -272,7 +272,6 @@ let chinaMapDataCache = null
 // 使用dashboard composable - 获取全局状态
 const { 
   data: dashboardData, 
-  useMockData,
   formatNumber,
   formatPercentage 
 } = useDashboard()
@@ -420,24 +419,7 @@ const geoData = ref({
 
 // 世界国家列表
 const worldCountries = computed(() => {
-  // 如果使用模拟数据，使用模拟数据
-  if (useMockData.value) {
-    const base = [
-      { name: '中国', visit: 8500 },
-      { name: '美国', visit: 5200 },
-      { name: '日本', visit: 3200 },
-      { name: '韩国', visit: 1800 },
-      { name: '德国', visit: 1400 },
-      { name: '英国', visit: 1100 },
-      { name: '法国', visit: 900 }
-    ]
-    return base.map(c => ({
-      name: c.name,
-      value: geoMetric.value === 'visit' ? c.visit : Math.round(c.visit * interceptRatio.value)
-    }))
-  }
-  
-  // 使用API数据时，如果没有数据返回空数组（显示为零）
+  // 使用API数据，如果没有数据返回空数组（显示为零）
   const apiData = geoData.value.world[geoMetric.value] || []
   return apiData.map(item => ({
     name: item.name,
@@ -447,24 +429,7 @@ const worldCountries = computed(() => {
 
 // 中国省份列表
 const chinaProvinces = computed(() => {
-  // 如果使用模拟数据，使用模拟数据
-  if (useMockData.value) {
-    const staticProvinces = [
-      { name: '广东', value: 50500 },
-      { name: '浙江', value: 8500 },
-      { name: '北京', value: 5200 },
-      { name: '上海', value: 3200 },
-      { name: '江西', value: 1400 },
-      { name: '香港', value: 1100 },
-      { name: '湖北', value: 636 }
-    ]
-    return staticProvinces.map(p => ({
-      name: p.name,
-      value: geoMetric.value === 'visit' ? p.value : Math.round(p.value * interceptRatio.value)
-    }))
-  }
-  
-  // 使用API数据时，如果没有数据返回空数组（显示为零）
+  // 使用API数据，如果没有数据返回空数组（显示为零）
   const apiData = geoData.value.china[geoMetric.value] || []
   return apiData.map(item => ({
     name: item.name,
@@ -691,12 +656,9 @@ const groupDataByInterval = (dataArray, intervalMinutes = 5) => {
 
 // 从后端获取QPS数据（最近30分钟）
 const fetchQPSData = async () => {
-  if (useMockData.value) return
-  
   try {
     // 后端不支持30m，使用1h（最小支持的时间范围），然后前端过滤30分钟
     const response = await trafficAPI.getQPSData({ timeRange: '1h' })
-    console.log('[QPS数据]:', response)
     
     // axios返回的response.data就是后端返回的JSON对象
     // 根据接口文档，后端返回格式：{code: 200, message: "...", data: {...}}
@@ -768,8 +730,6 @@ const fetchQPSData = async () => {
         current: Number(apiData.current) || 0,
         history: processedHistory
       }
-      
-      console.log('[QPS数据] 处理后的数据:', qpsData.value)
     } else {
       console.warn('[QPS数据] 响应数据格式不符合预期，完整响应:', JSON.stringify(response, null, 2))
       qpsData.value = { current: 0, history: [] }
@@ -792,15 +752,9 @@ const refreshQpsData = async () => {
 
 // 从后端获取访问趋势数据
 const fetchVisitData = async () => {
-  if (useMockData.value) {
-    console.log('[访问趋势] 使用模拟数据，跳过API请求')
-    return
-  }
   
   try {
     const response = await trafficAPI.getVisitData({ timeRange: '24h' })
-    console.log('[访问趋势] API响应:', response)
-    console.log('[访问趋势] response.data:', response?.data)
     
     // axios返回的response.data就是后端返回的JSON对象
     // 根据接口文档，后端返回格式：{code: 200, message: "...", data: {peak: ..., data: [...]}}
@@ -809,37 +763,29 @@ const fetchVisitData = async () => {
       // 如果axios返回的data包含后端标准格式 {code: 200, data: {...}}
       if (response.data.code === 200 && response.data.data) {
         apiData = response.data.data
-        console.log('[访问趋势] 从 response.data.data 获取数据:', apiData)
       } 
       // 如果axios返回的data直接是数据对象 {peak: ..., data: [...]}
       else if (response.data.peak !== undefined || (response.data.data && Array.isArray(response.data.data))) {
         apiData = response.data
-        console.log('[访问趋势] 从 response.data 直接获取数据:', apiData)
       }
       // 如果response.data.data存在但可能不是数组
       else if (response.data.data && typeof response.data.data === 'object') {
         apiData = response.data.data
-        console.log('[访问趋势] 从 response.data.data 获取对象数据:', apiData)
       }
     }
-    
-    console.log('[访问趋势] 解析后的 apiData:', apiData)
     
     if (apiData) {
       // 获取数据数组，支持多种字段名
       const dataArray = apiData.data || apiData.history || apiData.list || []
-      console.log('[访问趋势] 数据数组:', dataArray, '长度:', dataArray.length)
       
       // 检查时间格式，如果已经是格式化后的字符串，直接使用
       let processedData = []
       
       if (dataArray.length > 0) {
         const firstItem = dataArray[0]
-        console.log('[访问趋势] 第一个数据项:', firstItem)
         
         const firstTime = firstItem?.time
         const isFormattedTime = typeof firstTime === 'string' && /^\d{1,2}:\d{2}$/.test(firstTime)
-        console.log('[访问趋势] 时间格式检测 - firstTime:', firstTime, 'isFormattedTime:', isFormattedTime)
         
         if (isFormattedTime) {
           // 时间已经是格式化后的，直接使用（后端已经按区间统计好了）
@@ -847,7 +793,6 @@ const fetchVisitData = async () => {
             time: item.time || '',
             value: Number(item.value) || 0
           })).filter(item => item.time)
-          console.log('[访问趋势] 使用格式化时间，处理后数据:', processedData)
         } else {
           // 需要分组处理
           const rawData = dataArray
@@ -869,9 +814,7 @@ const fetchVisitData = async () => {
             })
             .filter(item => item !== null)
           
-          console.log('[访问趋势] 分组处理前的原始数据:', rawData)
           processedData = groupDataByInterval(rawData, 5)
-          console.log('[访问趋势] 分组处理后的数据:', processedData)
         }
       } else {
         console.warn('[访问趋势] 数据数组为空')
@@ -881,8 +824,6 @@ const fetchVisitData = async () => {
         peak: Number(apiData.peak) || 0,
         data: processedData
       }
-      
-      console.log('[访问趋势] 最终设置的 visitData.value:', visitData.value)
     } else {
       console.warn('[访问趋势] apiData 为空，响应数据格式不符合预期')
       console.warn('[访问趋势] 完整响应:', JSON.stringify(response, null, 2))
@@ -890,7 +831,6 @@ const fetchVisitData = async () => {
     }
     
     await nextTick()
-    console.log('[访问趋势] 调用 initVisitChart，当前 visitData.value:', visitData.value)
     initVisitChart()
   } catch (error) {
     console.error('[访问趋势] 获取失败:', error)
@@ -903,15 +843,9 @@ const fetchVisitData = async () => {
 
 // 从后端获取拦截趋势数据
 const fetchInterceptData = async () => {
-  if (useMockData.value) {
-    console.log('[拦截趋势] 使用模拟数据，跳过API请求')
-    return
-  }
   
   try {
     const response = await trafficAPI.getInterceptData({ timeRange: '24h' })
-    console.log('[拦截趋势] API响应:', response)
-    console.log('[拦截趋势] response.data:', response?.data)
     
     // axios返回的response.data就是后端返回的JSON对象
     // 根据接口文档，后端返回格式：{code: 200, message: "...", data: {peak: ..., data: [...]}}
@@ -920,37 +854,29 @@ const fetchInterceptData = async () => {
       // 如果axios返回的data包含后端标准格式 {code: 200, data: {...}}
       if (response.data.code === 200 && response.data.data) {
         apiData = response.data.data
-        console.log('[拦截趋势] 从 response.data.data 获取数据:', apiData)
       } 
       // 如果axios返回的data直接是数据对象 {peak: ..., data: [...]}
       else if (response.data.peak !== undefined || (response.data.data && Array.isArray(response.data.data))) {
         apiData = response.data
-        console.log('[拦截趋势] 从 response.data 直接获取数据:', apiData)
       }
       // 如果response.data.data存在但可能不是数组
       else if (response.data.data && typeof response.data.data === 'object') {
         apiData = response.data.data
-        console.log('[拦截趋势] 从 response.data.data 获取对象数据:', apiData)
       }
     }
-    
-    console.log('[拦截趋势] 解析后的 apiData:', apiData)
     
     if (apiData) {
       // 获取数据数组，支持多种字段名
       const dataArray = apiData.data || apiData.history || apiData.list || []
-      console.log('[拦截趋势] 数据数组:', dataArray, '长度:', dataArray.length)
       
       // 检查时间格式，如果已经是格式化后的字符串，直接使用
       let processedData = []
       
       if (dataArray.length > 0) {
         const firstItem = dataArray[0]
-        console.log('[拦截趋势] 第一个数据项:', firstItem)
         
         const firstTime = firstItem?.time
         const isFormattedTime = typeof firstTime === 'string' && /^\d{1,2}:\d{2}$/.test(firstTime)
-        console.log('[拦截趋势] 时间格式检测 - firstTime:', firstTime, 'isFormattedTime:', isFormattedTime)
         
         if (isFormattedTime) {
           // 时间已经是格式化后的，直接使用（后端已经按区间统计好了）
@@ -958,7 +884,6 @@ const fetchInterceptData = async () => {
             time: item.time || '',
             value: Number(item.value) || 0
           })).filter(item => item.time)
-          console.log('[拦截趋势] 使用格式化时间，处理后数据:', processedData)
         } else {
           // 需要分组处理
           const rawData = dataArray
@@ -980,9 +905,7 @@ const fetchInterceptData = async () => {
             })
             .filter(item => item !== null)
           
-          console.log('[拦截趋势] 分组处理前的原始数据:', rawData)
           processedData = groupDataByInterval(rawData, 5)
-          console.log('[拦截趋势] 分组处理后的数据:', processedData)
         }
       } else {
         console.warn('[拦截趋势] 数据数组为空')
@@ -992,8 +915,6 @@ const fetchInterceptData = async () => {
         peak: Number(apiData.peak) || 0,
         data: processedData
       }
-      
-      console.log('[拦截趋势] 最终设置的 interceptData.value:', interceptData.value)
     } else {
       console.warn('[拦截趋势] apiData 为空，响应数据格式不符合预期')
       console.warn('[拦截趋势] 完整响应:', JSON.stringify(response, null, 2))
@@ -1001,7 +922,6 @@ const fetchInterceptData = async () => {
     }
     
     await nextTick()
-    console.log('[拦截趋势] 调用 initInterceptChart，当前 interceptData.value:', interceptData.value)
     initInterceptChart()
   } catch (error) {
     console.error('[拦截趋势] 获取失败:', error)
@@ -1101,8 +1021,6 @@ const initVisitChart = () => {
   try { chart.clear() } catch (e) {}
   
   const data = visitData.value.data || []
-  console.log('[访问图表] 初始化，visitData.value:', visitData.value)
-  console.log('[访问图表] 原始数据数组:', data)
   
   // 确保数据有效性
   const validData = data.filter(item => {
@@ -1112,13 +1030,9 @@ const initVisitChart = () => {
     }
     return isValid
   })
-  console.log('[访问图表] 有效数据:', validData)
   
   const timeLabels = validData.map(item => item.time || '')
   const values = validData.map(item => Number(item.value) || 0)
-  
-  console.log('[访问图表] 时间标签:', timeLabels)
-  console.log('[访问图表] 数值:', values)
   
   const option = {
     backgroundColor: 'transparent',
@@ -1191,9 +1105,7 @@ const initVisitChart = () => {
     }]
   }
   
-  console.log('[访问图表] ECharts配置:', option)
   chart.setOption(option)
-  console.log('[访问图表] 图表配置已应用')
 }
 
 // 初始化拦截图表
@@ -1206,8 +1118,6 @@ const initInterceptChart = () => {
   try { chart.clear() } catch (e) {}
   
   const data = interceptData.value.data || []
-  console.log('[拦截图表] 初始化，interceptData.value:', interceptData.value)
-  console.log('[拦截图表] 原始数据数组:', data)
   
   // 确保数据有效性
   const validData = data.filter(item => {
@@ -1217,13 +1127,9 @@ const initInterceptChart = () => {
     }
     return isValid
   })
-  console.log('[拦截图表] 有效数据:', validData)
   
   const timeLabels = validData.map(item => item.time || '')
   const values = validData.map(item => Number(item.value) || 0)
-  
-  console.log('[拦截图表] 时间标签:', timeLabels)
-  console.log('[拦截图表] 数值:', values)
   
   const option = {
     backgroundColor: 'transparent',
@@ -1296,9 +1202,7 @@ const initInterceptChart = () => {
     }]
   }
   
-  console.log('[拦截图表] ECharts配置:', option)
   chart.setOption(option)
-  console.log('[拦截图表] 图表配置已应用')
 }
 
 // 初始化世界地图
@@ -1789,11 +1693,6 @@ const getAttackTypeColor = (type) => {
 
 // 从后端获取地理位置数据
 const fetchGeoData = async () => {
-  // 如果使用模拟数据，不调用API
-  if (useMockData.value) {
-    console.log('当前使用模拟数据，跳过地理位置API调用')
-    return
-  }
   
   try {
     // 并行获取世界地图和中国地图的访问和拦截数据
@@ -1806,7 +1705,6 @@ const fetchGeoData = async () => {
     
     // 处理世界地图访问数据
     if (worldVisit.status === 'fulfilled') {
-      console.log('[地理位置] 世界-访问:', worldVisit.value)
       if (worldVisit.value?.data) {
         const responseData = worldVisit.value.data
         geoData.value.world.visit = responseData.countries || responseData.provinces || []
@@ -1820,7 +1718,6 @@ const fetchGeoData = async () => {
     
     // 处理世界地图拦截数据
     if (worldIntercept.status === 'fulfilled') {
-      console.log('[地理位置] 世界-拦截:', worldIntercept.value)
       if (worldIntercept.value?.data) {
         const responseData = worldIntercept.value.data
         geoData.value.world.intercept = responseData.countries || responseData.provinces || []
@@ -1834,7 +1731,6 @@ const fetchGeoData = async () => {
     
     // 处理中国地图访问数据
     if (chinaVisit.status === 'fulfilled') {
-      console.log('[地理位置] 中国-访问:', chinaVisit.value)
       if (chinaVisit.value?.data) {
         const responseData = chinaVisit.value.data
         geoData.value.china.visit = responseData.provinces || responseData.countries || []
@@ -1848,7 +1744,6 @@ const fetchGeoData = async () => {
     
     // 处理中国地图拦截数据
     if (chinaIntercept.status === 'fulfilled') {
-      console.log('[地理位置] 中国-拦截:', chinaIntercept.value)
       if (chinaIntercept.value?.data) {
         const responseData = chinaIntercept.value.data
         geoData.value.china.intercept = responseData.provinces || responseData.countries || []
@@ -1871,20 +1766,12 @@ const fetchGeoData = async () => {
 
 // 从后端获取KPI数据
 const fetchKpiData = async () => {
-  // 如果使用模拟数据，不调用API
-  if (useMockData.value) {
-    console.log('当前使用模拟数据，跳过API调用')
-    return
-  }
   
   try {
     loading.value = true
-    console.log('开始获取流量分析数据...')
     
     // 调用后端接口
     const response = await trafficAPI.getAccessStats()
-    
-    console.log('获取到的完整响应:', response)
     
     // 根据后端实际返回的数据结构解析
     // 后端返回格式：{ code: 200, message: "操作成功", data: {...}, timestamp: ... }
@@ -1905,13 +1792,9 @@ const fetchKpiData = async () => {
       }
     }
     
-    console.log('解析后的统计数据:', statsData)
-    
     if (statsData) {
       // 从 statsData.data 中提取实际数据
       const actualData = statsData.data || statsData
-      
-      console.log('实际数据:', actualData)
       
       // 更新全局状态中的KPI数据，映射字段
       dashboardData.kpi = {
@@ -1934,8 +1817,6 @@ const fetchKpiData = async () => {
         mobileTraffic: actualData.mobileTraffic ?? 0, // 移动端流量
         desktopTraffic: actualData.desktopTraffic ?? 0 // 桌面端流量
       }
-      
-      console.log('KPI数据已更新到全局状态:', dashboardData.kpi)
     } else {
       console.warn('未能解析统计数据')
     }
@@ -1979,70 +1860,8 @@ onMounted(async () => {
   
   })
 
-// 监听 useMockData 变化，重新获取数据
-watch(useMockData, async (newValue) => {
-  console.log('=== TrafficAnalysis: useMockData 变化了 ===')
-  console.log('新值:', newValue)
-  
-  if (!newValue) {
-    // 切换到API数据，重新获取所有数据
-    console.log('切换到API数据，重新获取所有数据')
-    await Promise.all([
-      fetchKpiData(),
-      fetchGeoData(),
-      fetchQPSData(),
-      fetchVisitData(),
-      fetchInterceptData()
-    ])
-  } else {
-    // 切换到模拟数据，重置为模拟数据
-    console.log('切换到模拟数据')
-    // 使用模拟数据
-    visitData.value = {
-      peak: 17600,
-      data: [
-        { time: '10:00', value: 1200 },
-        { time: '11:00', value: 1800 },
-        { time: '12:00', value: 2200 },
-        { time: '13:00', value: 1900 },
-        { time: '14:00', value: 2500 },
-        { time: '15:00', value: 3000 },
-        { time: '16:00', value: 2800 }
-      ]
-    }
-    interceptData.value = {
-      peak: 11800,
-      data: [
-        { time: '10:00', value: 800 },
-        { time: '11:00', value: 1200 },
-        { time: '12:00', value: 1500 },
-        { time: '13:00', value: 1300 },
-        { time: '14:00', value: 1800 },
-        { time: '15:00', value: 2000 },
-        { time: '16:00', value: 1900 }
-      ]
-    }
-    qpsData.value = {
-      current: 5,
-      history: [
-        { time: '10:00', value: 3 },
-        { time: '10:05', value: 5 },
-        { time: '10:10', value: 4 },
-        { time: '10:15', value: 6 },
-        { time: '10:20', value: 7 },
-        { time: '10:25', value: 5 },
-        { time: '10:30', value: 4 }
-      ]
-    }
-  }
-  
-  await nextTick()
-  initAllCharts()
-})
-
-// 监听地理位置数据变化，自动刷新地图（只在非模拟数据模式下）
+// 监听地理位置数据变化，自动刷新地图
 watch(() => {
-  if (useMockData.value) return null
   const currentScope = geoScope.value
   const currentMetric = geoMetric.value
   return geoData.value[currentScope]?.[currentMetric]
@@ -2068,16 +1887,13 @@ watch([geoScope, geoMetric], async (newVal, oldVal) => {
   // 避免初始化时的重复调用
   if (oldVal === undefined) return
   
-  // 如果不是使用模拟数据，且当前选择的数据为空，尝试重新获取
-  if (!useMockData.value) {
-    const currentScope = geoScope.value
-    const currentMetric = geoMetric.value
-    const currentData = geoData.value[currentScope][currentMetric]
-    
-    if (!currentData || currentData.length === 0) {
-      console.log(`重新获取${currentScope === 'world' ? '世界' : '中国'}地图${currentMetric === 'visit' ? '访问' : '拦截'}数据`)
-      await fetchGeoData()
-    }
+  // 如果当前选择的数据为空，尝试重新获取
+  const currentScope = geoScope.value
+  const currentMetric = geoMetric.value
+  const currentData = geoData.value[currentScope][currentMetric]
+  
+  if (!currentData || currentData.length === 0) {
+    await fetchGeoData()
   }
   
   await nextTick()

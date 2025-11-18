@@ -74,13 +74,13 @@
         <button @click="refreshData" class="retry-btn">重试</button>
       </div>
 
-      <!-- 数据源切换按钮 -->
+      <!-- 数据源切换按钮
       <div class="data-source-toggle">
         <button @click="toggleDataSource" class="toggle-btn">
           {{ useMockData ? '使用模拟数据' : '使用API数据' }}
         </button>
         <button @click="refreshData" class="refresh-btn">刷新数据</button>
-      </div>
+      </div> -->
 
       <!-- 页面内容 -->
       <TrafficAnalysis v-if="currentPage === 'traffic'" />
@@ -95,12 +95,12 @@
 
 <script>
 import { ref, onMounted } from 'vue'
-import TrafficAnalysis from '../components/TrafficAnalysis.vue'
-import SecurityStatus from '../components/SecurityStatus.vue'
-import ProtectionReport from '../components/ProtectionReport.vue'
-import WafDashboard from '../components/WafDashboard.vue'
-import AlertManagement from '../components/AlertManagement.vue'
-import RuleManagement from '../components/RuleManagement.vue'
+import TrafficAnalysis from './TrafficAnalysis.vue'
+import SecurityStatus from './SecurityStatus.vue'
+import ProtectionReport from './ProtectionReport.vue'
+import WafDashboard from './WafDashboard.vue'
+import AlertManagement from './AlertManagement.vue'
+import RuleManagement from './RuleManagement.vue'
 import { useDashboard } from '../composables/useDashboard'
 import { useAuth } from '../composables/useAuth'
 
@@ -118,9 +118,7 @@ export default {
     const { 
       loading, 
       error, 
-      useMockData, 
-      refreshData, 
-      toggleDataSource
+      refreshData
     } = useDashboard()
 
     const {
@@ -156,9 +154,7 @@ export default {
     return {
       loading,
       error,
-      useMockData,
       refreshData,
-      toggleDataSource,
       currentPage,
       switchPage,
       user,

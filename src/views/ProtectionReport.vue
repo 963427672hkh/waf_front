@@ -136,7 +136,7 @@
 </template>
 
 <script setup>
-import reportService from '@api/report.js';
+import reportService from '../api/report.js';
 
 import { computed, onMounted, reactive, ref } from 'vue';
 // 响应式数据

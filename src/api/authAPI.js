@@ -1,5 +1,6 @@
 // 认证相关API接口
 import apiClient from './client'
+import axios from 'axios'
 
 export const authAPI = {
   // 用户登录
@@ -13,9 +14,12 @@ export const authAPI = {
 
   // 刷新令牌
   refreshToken: async (refreshToken) => {
-    const response = await apiClient.client.post('/auth/refresh', {
-      refreshToken
-    })
+    const response = await axios.get(
+      `${import.meta.env.VITE_API_BASE_URL || '/api'}/auth/refresh`,
+      { headers: { 'Content-Type': 'application/json' ,
+        Authorization: `Bearer ${refreshToken}`} }
+    )
+    console.log('1111',response)
     return response.data
   },
 

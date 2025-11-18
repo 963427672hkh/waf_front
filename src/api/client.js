@@ -49,10 +49,10 @@ api.interceptors.response.use(
         console.log('尝试刷新token，第', refreshAttempts, '次')
         
         // 直接调用刷新接口，不通过authAPI（避免循环）
-        const refreshResponse = await axios.post(
+        const refreshResponse = await axios.get(
           `${import.meta.env.VITE_API_BASE_URL || '/api'}/auth/refresh`,
-          { refreshToken: refreshTokenValue },
-          { headers: { 'Content-Type': 'application/json' } }
+          { headers: { 'Content-Type': 'application/json' ,
+            Authorization: `Bearer ${refreshTokenValue}`} }
         )
         
         console.log('刷新token响应:', refreshResponse.data)
@@ -60,27 +60,27 @@ api.interceptors.response.use(
         // 解析响应数据
         // 响应格式: { code: 200, message: "...", data: { access_token: "...", expires_in: 900 } }
         const responseData = refreshResponse.data
-        
+
         // 检查响应是否成功
-        if (responseData.code === 200 && responseData.data?.access_token) {
-          const newAccessToken = responseData.data.access_token
-          
+        if (responseData.code === 200 && responseData.data?.accessToken) {
+          const newAccessToken = responseData.data.accessToken
+          const newRefreshToken = responseData.data.refreshToken
+
           // 更新token
           localStorage.setItem('waf_access_token', newAccessToken)
-          
+          localStorage.setItem('waf_refresh_token', newRefreshToken)
+
           // 重置请求头
           originalRequest.headers.Authorization = `Bearer ${newAccessToken}`
           
           // 重置刷新计数器
           refreshAttempts = 0
           
-          console.log('Token刷新成功，重试原始请求')
+          console.log('Token刷新成功')
           
-          // 重新发送原始请求
-          return api(originalRequest)
-        } else {
+          } else {
           throw new Error('刷新token返回的数据格式不正确')
-        }
+          }
       } catch (refreshError) {
         console.error('刷新token失败:', refreshError)
         

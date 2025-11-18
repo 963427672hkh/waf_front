@@ -145,7 +145,7 @@ import { useRouter } from 'vue-router'
 import { useAuth } from '../composables/useAuth'
 
 const router = useRouter()
-const { login, guestLogin, register, loading, error } = useAuth()
+const { login, guestLogin, register, loading, error ,setupTokenRefresh} = useAuth()
 
 const activeTab = ref('login')
 
@@ -189,6 +189,7 @@ const handleGuestLogin = async () => {
     console.log('LoginPage: 开始游客登录...')
     await guestLogin()
     console.log('LoginPage: 登录成功，准备跳转...')
+
     router.push('/')
     console.log('LoginPage: 跳转完成')
   } catch (err) {

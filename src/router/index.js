@@ -1,8 +1,8 @@
 // 路由配置
 import { createRouter, createWebHistory } from 'vue-router'
 
-// 导入组件
-import LoginPage from '../components/LoginPage.vue'
+// 导入页面组件
+import LoginPage from '../views/LoginPage.vue'
 import Dashboard from '../views/Dashboard.vue'
 
 const routes = [
