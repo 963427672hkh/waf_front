@@ -3,9 +3,9 @@
     <!-- 控制栏 -->
     <div class="controls">
       <div class="controls-left">
-        <button class="refresh-btn" @click="loadReports" :disabled="loading">
+        <button class="refresh-btn" @click="loadStats" :disabled="loading">
           <i class="fas fa-sync-alt" :class="{ 'fa-spin': loading }"></i> 
-          {{ loading ? '加载中...' : '刷新报告列表' }}
+          {{ loading ? '加载中...' : '刷新统计信息' }}
         </button>
         <div class="status">{{ status }}</div>
       </div>
@@ -22,14 +22,14 @@
             @blur="onSearchBlur"
           >
           <label>报告名称</label>
-          <div class="match-results" v-show="showSearchResults && filteredReports.length > 0">
+          <div class="match-results" v-show="showSearchResults && filteredExports.length > 0">
             <div 
-              v-for="report in filteredReports" 
-              :key="report.id"
+              v-for="exportItem in filteredExports" 
+              :key="exportItem.taskId"
               class="match-item"
-              @click="selectReport(report.title)"
+              @click="selectExport(exportItem.filename)"
             >
-              {{ report.title }}
+              {{ exportItem.filename }}
             </div>
           </div>
         </div>
@@ -40,7 +40,132 @@
       </div>
     </div>
     
-    <!-- 内容区域 -->
+    <!-- 统计信息区域 -->
+    <div class="stats-container" v-if="statsData">
+      <div class="stats-header">
+        <h3>WAF 日志统计概览</h3>
+        <div class="last-updated">最后更新: {{ formatDate(statsTimestamp) }}</div>
+      </div>
+      
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-icon total">
+            <i class="fas fa-file-alt"></i>
+          </div>
+          <div class="stat-info">
+            <div class="stat-value">{{ statsData.totalLogs || 0 }}</div>
+            <div class="stat-label">总日志数</div>
+          </div>
+        </div>
+        
+        <div class="stat-card">
+          <div class="stat-icon blocked">
+            <i class="fas fa-shield-alt"></i>
+          </div>
+          <div class="stat-info">
+            <div class="stat-value">{{ statsData.blockedLogs || 0 }}</div>
+            <div class="stat-label">拦截日志</div>
+          </div>
+        </div>
+        
+        <div class="stat-card">
+          <div class="stat-icon allowed">
+            <i class="fas fa-check-circle"></i>
+          </div>
+          <div class="stat-info">
+            <div class="stat-value">{{ statsData.allowedLogs || 0 }}</div>
+            <div class="stat-label">允许日志</div>
+          </div>
+        </div>
+        
+        <div class="stat-card">
+          <div class="stat-icon bypass">
+            <i class="fas fa-forward"></i>
+          </div>
+          <div class="stat-info">
+            <div class="stat-value">{{ statsData.bypassLogs || 0 }}</div>
+            <div class="stat-label">绕过日志</div>
+          </div>
+        </div>
+        
+        <div class="stat-card">
+          <div class="stat-icon unique">
+            <i class="fas fa-network-wired"></i>
+          </div>
+          <div class="stat-info">
+            <div class="stat-value">{{ statsData.uniqueIps || 0 }}</div>
+            <div class="stat-label">独立IP数</div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- 详细统计信息 -->
+      <div class="detailed-stats">
+        <div class="stat-section">
+          <h4>攻击类型分布</h4>
+          <div class="stat-list">
+            <div 
+              v-for="attack in statsData.topAttacks" 
+              :key="attack.type"
+              class="stat-item"
+            >
+              <span class="stat-name">{{ attack.type.toUpperCase() }}</span>
+              <span class="stat-count">{{ attack.count }}</span>
+              <div class="stat-bar">
+                <div 
+                  class="stat-bar-fill" 
+                  :style="{ width: attack.percentage + '%' }"
+                ></div>
+              </div>
+              <span class="stat-percentage">{{ attack.percentage }}%</span>
+            </div>
+          </div>
+        </div>
+        
+        <div class="stat-section">
+          <h4>规则触发排行</h4>
+          <div class="stat-list">
+            <div 
+              v-for="rule in statsData.topRules" 
+              :key="rule.ruleId"
+              class="stat-item"
+            >
+              <span class="stat-name">规则 {{ rule.ruleId }}</span>
+              <span class="stat-count">{{ rule.count }}</span>
+              <div class="stat-bar">
+                <div 
+                  class="stat-bar-fill" 
+                  :style="{ width: rule.percentage + '%' }"
+                ></div>
+              </div>
+              <span class="stat-percentage">{{ rule.percentage }}%</span>
+            </div>
+          </div>
+        </div>
+        
+        <div class="stat-section">
+          <h4>来源IP排行</h4>
+          <div class="stat-list">
+            <div 
+              v-for="ip in statsData.topIps" 
+              :key="ip.ip"
+              class="stat-item"
+            >
+              <span class="stat-name">{{ ip.ip }}</span>
+              <span class="stat-count">{{ ip.count }} (拦截: {{ ip.blockedCount }})</span>
+              <div class="stat-bar">
+                <div 
+                  class="stat-bar-fill" 
+                  :style="{ width: (ip.count / statsData.totalLogs * 100) + '%' }"
+                ></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- 导出历史区域 -->
     <div class="content">
       <!-- 表头 -->
       <div class="tlayar">
@@ -49,28 +174,28 @@
         <div>操作</div>
       </div>
       
-      <!-- 报告列表 -->
+      <!-- 导出历史列表 -->
       <div class="reports-container">
-        <div v-if="reports.length === 0 && !loading" class="empty-state">
-          <i class="fas fa-file-invoice"></i>
-          <h3>暂无报告数据</h3>
-          <p>点击"刷新报告列表"按钮加载数据</p>
+        <div v-if="exportHistory.length === 0 && !loading" class="empty-state">
+          <i class="fas fa-file-export"></i>
+          <h3>暂无导出记录</h3>
+          <p>点击"立即生成"按钮创建新的WAF日志报告</p>
         </div>
         
         <div v-else>
           <div 
-            v-for="report in reports" 
-            :key="report.id"
+            v-for="exportItem in exportHistory" 
+            :key="exportItem.taskId"
             class="thirdlayar"
           >
-            <div class="report-title">{{ report.title }}</div>
-            <div class="report-time">{{ formatDate(report.createTime) }}</div>
+            <div class="report-title">{{ exportItem.filename }}</div>
+            <div class="report-time">{{ formatDate(exportItem.createTime) }}</div>
             <div class="button-group">
-              <button class="btn view" @click="preview(report.pdfUrl)">
-                <i class="fas fa-eye"></i> 预览
+              <button class="btn download" @click="downloadExport(exportItem.taskId, exportItem.filename)">
+                <i class="fas fa-download"></i> 下载
               </button>
-              <button class="btn export" @click="downloadPdf(report.pdfUrl, report.title)">
-                <i class="fas fa-file-pdf"></i> 导出PDF
+              <button class="btn delete" @click="deleteExport(exportItem.taskId)">
+                <i class="fas fa-trash"></i> 删除
               </button>
             </div>
           </div>
@@ -82,7 +207,7 @@
     <div class="modal" v-show="showModal" @click="closeModalOnBackdrop">
       <div class="modal-content" @click.stop>
         <div class="modal-header">
-          <h3 class="modal-title">生成新报告</h3>
+          <h3 class="modal-title">生成WAF日志报告</h3>
           <button class="close-btn" @click="closeGenerateModal">&times;</button>
         </div>
         <form @submit.prevent="handleGenerate">
@@ -98,13 +223,14 @@
               :disabled="generating"
             >
           </div>
+          
           <div class="date-group">
             <div class="form-group">
               <label for="startDate">开始时间</label>
               <input 
-                type="date" 
+                type="datetime-local" 
                 id="startDate" 
-                v-model="newReport.startDate"
+                v-model="newReport.startTime"
                 class="form-control" 
                 required
                 :disabled="generating"
@@ -113,15 +239,93 @@
             <div class="form-group">
               <label for="endDate">结束时间</label>
               <input 
-                type="date" 
+                type="datetime-local" 
                 id="endDate" 
-                v-model="newReport.endDate"
+                v-model="newReport.endTime"
                 class="form-control" 
                 required
                 :disabled="generating"
               >
             </div>
           </div>
+          
+          <div class="form-group">
+            <label for="clientIp">客户端IP</label>
+            <input 
+              type="text" 
+              id="clientIp" 
+              v-model="newReport.clientIp"
+              class="form-control" 
+              placeholder="可选: 过滤特定IP"
+              :disabled="generating"
+            >
+          </div>
+          
+          <div class="form-group">
+            <label for="action">操作类型</label>
+            <select 
+              id="action" 
+              v-model="newReport.action"
+              class="form-control" 
+              :disabled="generating"
+            >
+              <option value="">全部</option>
+              <option value="BLOCK">拦截</option>
+              <option value="ALLOW">允许</option>
+              <option value="BYPASS">绕过</option>
+            </select>
+          </div>
+          
+          <div class="form-group">
+            <label for="ruleId">规则ID</label>
+            <input 
+              type="number" 
+              id="ruleId" 
+              v-model="newReport.ruleId"
+              class="form-control" 
+              placeholder="可选: 特定规则ID"
+              :disabled="generating"
+            >
+          </div>
+          
+          <div class="form-group">
+            <label for="tags">标签</label>
+            <input 
+              type="text" 
+              id="tags" 
+              v-model="newReport.tags"
+              class="form-control" 
+              placeholder="可选: 多个标签用逗号分隔"
+              :disabled="generating"
+            >
+          </div>
+          
+          <div class="form-group">
+            <label for="search">关键词搜索</label>
+            <input 
+              type="text" 
+              id="search" 
+              v-model="newReport.search"
+              class="form-control" 
+              placeholder="可选: 日志内容搜索"
+              :disabled="generating"
+            >
+          </div>
+          
+          <div class="form-group">
+            <label for="format">导出格式</label>
+            <select 
+              id="format" 
+              v-model="newReport.format"
+              class="form-control" 
+              required
+              :disabled="generating"
+            >
+              <option value="pdf">PDF</option>
+              <option value="csv">CSV</option>
+            </select>
+          </div>
+          
           <div class="modal-footer">
             <button type="button" class="btn-cancel" @click="closeGenerateModal" :disabled="generating">取消</button>
             <button type="submit" class="btn-submit" :disabled="generating">
@@ -136,163 +340,198 @@
 </template>
 
 <script setup>
-import reportService from '../api/report.js';
-
+import wafReportService from '@api/report.js';
 import { computed, onMounted, reactive, ref } from 'vue';
+
 // 响应式数据
-const loading = ref(false)
-const generating = ref(false)
-const status = ref('就绪')
-const reports = ref([])
-const searchQuery = ref('')
-const showSearchResults = ref(false)
-const showModal = ref(false)
+const loading = ref(false);
+const generating = ref(false);
+const status = ref('就绪');
+const statsData = ref(null);
+const statsTimestamp = ref(null);
+const exportHistory = ref([]);
+const searchQuery = ref('');
+const showSearchResults = ref(false);
+const showModal = ref(false);
 
 // 新报告表单数据
 const newReport = reactive({
   name: '',
-  startDate: '',
-  endDate: ''
-})
+  startTime: '',
+  endTime: '',
+  clientIp: '',
+  action: '',
+  ruleId: '',
+  tags: '',
+  search: '',
+  format: 'pdf'
+});
 
-// 计算属性 - 过滤后的报告
-const filteredReports = computed(() => {
-  if (!searchQuery.value.trim()) return []
+// 计算属性 - 过滤后的导出记录
+const filteredExports = computed(() => {
+  if (!searchQuery.value.trim()) return [];
   
-  return reports.value.filter(report => 
-    report.title.toLowerCase().includes(searchQuery.value.toLowerCase())
-  )
-})
+  return exportHistory.value.filter(item => 
+    item.filename.toLowerCase().includes(searchQuery.value.toLowerCase())
+  );
+});
 
 // 格式化日期
 const formatDate = (dateString) => {
-  const date = new Date(dateString)
+  if (!dateString) return '';
+  
+  const date = new Date(dateString);
   return date.toLocaleString('zh-CN', {
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
     hour: '2-digit',
     minute: '2-digit'
-  })
-}
+  });
+};
 
-// 加载报告数据
-const loadReports = async () => {
-  loading.value = true
-  status.value = '加载中...'
+// 加载统计信息
+const loadStats = async () => {
+  loading.value = true;
+  status.value = '加载中...';
   
   try {
-    reports.value = await reportService.loadReports()
-    status.value = `已加载 ${reports.value.length} 条报告`
+    const response = await wafReportService.getWafStats();
+    statsData.value = response.data;
+    statsTimestamp.value = response.timestamp;
+    status.value = '统计信息已更新';
   } catch (error) {
-    status.value = '加载失败'
-    console.error('加载报告失败:', error)
-    // 在实际应用中，这里可以显示更友好的错误提示
-    alert('加载报告失败，请重试')
+    status.value = '加载失败';
+    console.error('加载WAF统计信息失败:', error);
+    alert('加载统计信息失败，请重试');
   } finally {
-    loading.value = false
+    loading.value = false;
   }
-}
+};
+
+// 加载导出历史
+const loadExportHistory = async () => {
+  try {
+    exportHistory.value = await wafReportService.getExportHistory();
+  } catch (error) {
+    console.error('加载导出历史失败:', error);
+  }
+};
 
 // 搜索处理
 const handleSearch = () => {
-  showSearchResults.value = searchQuery.value.trim().length > 0
-}
+  showSearchResults.value = searchQuery.value.trim().length > 0;
+};
 
 // 搜索框失去焦点处理
 const onSearchBlur = () => {
-  // 延迟隐藏搜索结果，以便点击选项
   setTimeout(() => {
-    showSearchResults.value = false
-  }, 200)
-}
+    showSearchResults.value = false;
+  }, 200);
+};
 
-// 选择报告
-const selectReport = (title) => {
-  searchQuery.value = title
-  showSearchResults.value = false
-}
+// 选择导出记录
+const selectExport = (filename) => {
+  searchQuery.value = filename;
+  showSearchResults.value = false;
+};
 
-// 预览功能
-const preview = (pdfUrl) => {
-  reportService.previewReport(pdfUrl)
-}
+// 下载导出文件
+const downloadExport = async (taskId, filename) => {
+  try {
+    await wafReportService.downloadExport(taskId, filename);
+  } catch (error) {
+    console.error('下载导出文件失败:', error);
+    alert('下载文件失败，请重试');
+  }
+};
 
-// 下载PDF功能
-const downloadPdf = (pdfUrl, title) => {
-  reportService.downloadReport(pdfUrl, title)
-}
+// 删除导出记录
+const deleteExport = async (taskId) => {
+  if (confirm('确定要删除此导出记录吗？')) {
+    try {
+      await wafReportService.deleteExport(taskId);
+      await loadExportHistory();
+      alert('删除成功');
+    } catch (error) {
+      console.error('删除导出记录失败:', error);
+      alert('删除失败，请重试');
+    }
+  }
+};
 
 // 打开生成报告弹窗
 const openGenerateModal = () => {
-  showModal.value = true
+  showModal.value = true;
   
-  // 设置默认日期
-  const today = new Date()
-  const oneWeekAgo = new Date()
-  oneWeekAgo.setDate(today.getDate() - 7)
+  // 设置默认时间范围（最近24小时）
+  const endTime = new Date();
+  const startTime = new Date();
+  startTime.setDate(startTime.getDate() - 1);
   
-  newReport.startDate = oneWeekAgo.toISOString().split('T')[0]
-  newReport.endDate = today.toISOString().split('T')[0]
-}
+  newReport.startTime = startTime.toISOString().slice(0, 16);
+  newReport.endTime = endTime.toISOString().slice(0, 16);
+};
 
 // 关闭生成报告弹窗
 const closeGenerateModal = () => {
   if (!generating.value) {
-    showModal.value = false
-    newReport.name = ''
-    newReport.startDate = ''
-    newReport.endDate = ''
+    showModal.value = false;
+    // 重置表单
+    Object.keys(newReport).forEach(key => {
+      if (key === 'format') {
+        newReport[key] = 'pdf';
+      } else {
+        newReport[key] = '';
+      }
+    });
   }
-}
+};
 
 // 点击弹窗外部关闭
 const closeModalOnBackdrop = (event) => {
   if (event.target === event.currentTarget && !generating.value) {
-    closeGenerateModal()
+    closeGenerateModal();
   }
-}
+};
 
 // 处理表单提交
 const handleGenerate = async () => {
-  const validation = reportService.validateReportData(newReport)
+  const validation = wafReportService.validateExportData(newReport);
   if (!validation.isValid) {
-    alert(validation.message)
-    return
+    alert(validation.message);
+    return;
   }
   
-  if (reportService.isDuplicateReportName(newReport.name, reports.value)) {
-    alert('报告名称已存在，请使用其他名称')
-    return
-  }
-  
-  generating.value = true
+  generating.value = true;
   
   try {
-    const result = await reportService.generateReport(newReport)
+    const result = await wafReportService.generateExport(newReport);
     
-    alert(`报告 "${result.title}" 生成成功！`)
+    alert(`报告 "${result.filename}" 生成成功！`);
     
-    // 重新加载报告列表以显示新报告
-    await loadReports()
-    closeGenerateModal()
+    // 重新加载导出历史
+    await loadExportHistory();
+    closeGenerateModal();
     
   } catch (error) {
-    console.error('生成报告失败:', error)
-    alert('生成报告失败，请重试')
+    console.error('生成报告失败:', error);
+    alert('生成报告失败，请重试');
   } finally {
-    generating.value = false
+    generating.value = false;
   }
-}
+};
 
 // 组件挂载时自动加载数据
 onMounted(() => {
-  // 延迟加载，让用户看到界面变化
-  setTimeout(loadReports, 1000)
-})
+  loadStats();
+  loadExportHistory();
+});
 </script>
 
 <style scoped>
+/* 原有的样式保持不变，新增统计信息相关样式 */
+
 .protection-report {
   padding: 20px;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -442,6 +681,167 @@ onMounted(() => {
   transform: translateY(-2px);
 }
 
+/* 统计信息样式 */
+.stats-container {
+  background: white;
+  border-radius: 15px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+  margin-bottom: 20px;
+  padding: 20px;
+}
+
+.stats-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  border-bottom: 1px solid #e0e0e0;
+  padding-bottom: 15px;
+}
+
+.stats-header h3 {
+  margin: 0;
+  color: #2c3e50;
+}
+
+.last-updated {
+  color: #7f8c8d;
+  font-size: 14px;
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 20px;
+  margin-bottom: 30px;
+}
+
+.stat-card {
+  display: flex;
+  align-items: center;
+  background: #f8f9fa;
+  border-radius: 10px;
+  padding: 20px;
+  box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+  transition: transform 0.3s ease;
+}
+
+.stat-card:hover {
+  transform: translateY(-5px);
+}
+
+.stat-icon {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 15px;
+  font-size: 24px;
+  color: white;
+}
+
+.stat-icon.total {
+  background: linear-gradient(135deg, #3498db, #2980b9);
+}
+
+.stat-icon.blocked {
+  background: linear-gradient(135deg, #e74c3c, #c0392b);
+}
+
+.stat-icon.allowed {
+  background: linear-gradient(135deg, #27ae60, #229954);
+}
+
+.stat-icon.bypass {
+  background: linear-gradient(135deg, #f39c12, #e67e22);
+}
+
+.stat-icon.unique {
+  background: linear-gradient(135deg, #9b59b6, #8e44ad);
+}
+
+.stat-value {
+  font-size: 24px;
+  font-weight: bold;
+  color: #2c3e50;
+  margin-bottom: 5px;
+}
+
+.stat-label {
+  font-size: 14px;
+  color: #7f8c8d;
+}
+
+.detailed-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 30px;
+}
+
+.stat-section {
+  background: #f8f9fa;
+  border-radius: 10px;
+  padding: 20px;
+}
+
+.stat-section h4 {
+  margin: 0 0 15px 0;
+  color: #2c3e50;
+  border-bottom: 1px solid #e0e0e0;
+  padding-bottom: 10px;
+}
+
+.stat-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.stat-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.stat-name {
+  flex: 1;
+  font-weight: 500;
+  color: #2c3e50;
+  font-size: 14px;
+}
+
+.stat-count {
+  width: 80px;
+  text-align: right;
+  font-size: 14px;
+  color: #7f8c8d;
+}
+
+.stat-bar {
+  flex: 2;
+  height: 8px;
+  background: #e0e0e0;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.stat-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #3498db, #2980b9);
+  border-radius: 4px;
+  transition: width 0.5s ease;
+}
+
+.stat-percentage {
+  width: 40px;
+  text-align: right;
+  font-size: 14px;
+  color: #7f8c8d;
+}
+
+/* 内容区域样式 */
 .content {
   background: white;
   border-radius: 15px;
@@ -501,21 +901,21 @@ onMounted(() => {
   transition: all 0.3s ease;
 }
 
-.btn.view {
+.btn.download {
   background: #3498db;
   color: white;
 }
 
-.btn.view:hover {
+.btn.download:hover {
   background: #2980b9;
 }
 
-.btn.export {
+.btn.delete {
   background: #e74c3c;
   color: white;
 }
 
-.btn.export:hover {
+.btn.delete:hover {
   background: #c0392b;
 }
 
@@ -558,7 +958,7 @@ onMounted(() => {
   background: white;
   border-radius: 15px;
   width: 90%;
-  max-width: 500px;
+  max-width: 600px;
   max-height: 90vh;
   overflow-y: auto;
   box-shadow: 0 20px 40px rgba(0,0,0,0.3);
@@ -681,6 +1081,14 @@ onMounted(() => {
     width: 100%;
   }
   
+  .stats-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .detailed-stats {
+    grid-template-columns: 1fr;
+  }
+  
   .tlayar,
   .thirdlayar {
     grid-template-columns: 1fr;
@@ -689,6 +1097,10 @@ onMounted(() => {
   
   .date-group {
     grid-template-columns: 1fr;
+  }
+  
+  .button-group {
+    justify-content: flex-start;
   }
 }
 </style>
