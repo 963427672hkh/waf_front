@@ -165,6 +165,11 @@ export function useAuth() {
     try {
       const response = await authAPI.refreshToken(refreshToken.value)
       const { data } = response
+
+      // 兼容后端返回的 camelCase 字段
+      const newAccessToken = data.accessToken || data.access_token
+      const newRefreshToken = data.refreshToken || data.refresh_token || refreshToken.value
+      const expiresIn = data.expiresIn || data.expires_in
       
       // 更新访问令牌
       setTokens(data.access_token, refreshToken.value)
