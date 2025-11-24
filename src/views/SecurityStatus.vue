@@ -32,31 +32,31 @@
       <div class="kpi-card">
         <div class="kpi-icon">⏱️</div>
         <div class="kpi-value">{{ formatNumber(statCards.frequencyLimit) }}</div>
-        <div class="kpi-label">频率限制</div>
+        <div class="kpi-label">请求频率</div>
         <div class="kpi-info">ℹ️</div>
       </div>
       <div class="kpi-card">
         <div class="kpi-icon">🚪</div>
         <div class="kpi-value">{{ formatNumber(statCards.waitingRoom) }}</div>
-        <div class="kpi-label">等候室</div>
+        <div class="kpi-label">并发连接</div>
         <div class="kpi-info">ℹ️</div>
       </div>
       <div class="kpi-card">
         <div class="kpi-icon">👤</div>
         <div class="kpi-value">{{ formatNumber(statCards.humanMachineVerification) }}</div>
-        <div class="kpi-label">人机验证</div>
+        <div class="kpi-label">高危事件</div>
         <div class="kpi-info">ℹ️</div>
       </div>
       <div class="kpi-card">
         <div class="kpi-icon">🔐</div>
         <div class="kpi-value">{{ formatNumber(statCards.identityAuth) }}</div>
-        <div class="kpi-label">身份认证</div>
+        <div class="kpi-label">激活规则</div>
         <div class="kpi-info">ℹ️</div>
       </div>
       <div class="kpi-card">
         <div class="kpi-icon">🛡️</div>
         <div class="kpi-value">{{ formatNumber(statCards.pageProtect) }}</div>
-        <div class="kpi-label">网页防篡改</div>
+        <div class="kpi-label">错误率</div>
         <div class="kpi-info">ℹ️</div>
       </div>
     </div>
@@ -64,19 +64,35 @@
     <!-- 主要内容区域 -->
     <div class="main-content">
       <!-- 左侧列 -->
-      <div class="left-column">
-        <!-- 攻击防护趋势 -->
-        <div class="panel">
-          <div class="panel-header">
-            <h3 class="panel-title">攻击防护趋势</h3>
-            <div class="decoration-line"></div>
-          </div>
-          <div class="border-wrapper">
-            <div class="chart-container">
-              <AttackTrendChart :data="attackTrend" />
-            </div>
-          </div>
+  <div class="left-column">
+    <!-- 攻击防护趋势 -->
+    <div class="panel">
+      <div class="panel-header">
+        <h3 class="panel-title">攻击防护趋势</h3>
+        <div class="panel-controls">
+          <select v-model="attackRangeMode" class="control-select">
+            <option value="preset">预设</option>
+            <option value="custom">自定义</option>
+          </select>
+          <select v-if="attackRangeMode==='preset'" v-model="attackPresetRange" class="control-select">
+            <option value="1h">近1小时</option>
+            <option value="6h">近6小时</option>
+            <option value="24h">近24小时</option>
+            <option value="7d">近7天</option>
+            <option value="30d">近30天</option>
+          </select>
+          <input v-if="attackRangeMode==='custom'" v-model="attackStartDate" type="date" class="control-input" />
+          <input v-if="attackRangeMode==='custom'" v-model="attackEndDate" type="date" class="control-input" />
+          <button class="refresh-btn" @click="applyAttackRange">应用</button>
         </div>
+        <div class="decoration-line"></div>
+      </div>
+      <div class="border-wrapper">
+        <div class="chart-container">
+          <AttackTrendChart :data="attackTrend" />
+        </div>
+      </div>
+    </div>
 
         <!-- 攻击源IP（基于拦截趋势接口） -->
         <div class="panel">
@@ -84,109 +100,124 @@
             <h3 class="panel-title">攻击源IP</h3>
             <div class="decoration-line"></div>
           </div>
-          <div class="border-wrapper">
-            <div class="table-container">
-              <div v-for="(item, index) in attackInterceptIPs" :key="index" class="table-item">
-                <span class="ip-address">{{ item.ip }}</span>
-                <span class="ip-count">{{ formatNumber(item.count) }}</span>
-              </div>
-            </div>
+      <div class="border-wrapper">
+        <div class="table-container">
+          <div v-for="(item, index) in attackInterceptIPs" :key="index" class="table-item">
+            <span class="ip-address">{{ item.ip }}</span>
+            <span class="ip-count">{{ formatNumber(item.count) }}</span>
           </div>
         </div>
+      </div>
+    </div>
 
         
 
         <!-- 黑白名单趋势 -->
-        <div class="panel">
-          <div class="panel-header">
-            <h3 class="panel-title">黑白名单趋势</h3>
-            <div class="decoration-line"></div>
-          </div>
-          <div class="border-wrapper">
-            <div class="chart-container">
-              <BlackWhiteTrend :data="blackWhiteTrend" />
-            </div>
-          </div>
+    <div class="panel">
+      <div class="panel-header">
+        <h3 class="panel-title">黑白名单趋势</h3>
+        <div class="panel-controls">
+          <select v-model="bwRangeMode" class="control-select">
+            <option value="preset">预设</option>
+            <option value="custom">自定义</option>
+          </select>
+          <select v-if="bwRangeMode==='preset'" v-model="bwPresetRange" class="control-select">
+            <option value="1h">近1小时</option>
+            <option value="6h">近6小时</option>
+            <option value="24h">近24小时</option>
+            <option value="7d">近7天</option>
+            <option value="30d">近30天</option>
+          </select>
+          <input v-if="bwRangeMode==='custom'" v-model="bwStartDate" type="date" class="control-input" />
+          <input v-if="bwRangeMode==='custom'" v-model="bwEndDate" type="date" class="control-input" />
+          <button class="refresh-btn" @click="applyBwRange">应用</button>
         </div>
+        <div class="decoration-line"></div>
+      </div>
+      <div class="border-wrapper">
+        <div class="chart-container">
+          <BlackWhiteTrend :data="blackWhiteTrend" />
+        </div>
+      </div>
+    </div>
 
         
-      </div>
+        <!-- 防护规则状态（移动到左侧列） -->
+        <div class="panel protection-rules-panel">
+          <div class="panel-header">
+            <h3 class="panel-title">防护规则状态</h3>
+          </div>
+          <div class="protection-rules-list">
+            <div v-for="(rule, index) in protectionRules" :key="index" class="protection-rule-item">
+              <div class="rule-icon" :class="rule.status">{{ getRuleStatusIcon(rule.status) }}</div>
+              <div class="rule-info">
+                <div class="rule-name">{{ rule.name }}</div>
+                <div class="rule-description">{{ rule.description }}</div>
+              </div>
+              <div class="rule-status" :class="rule.status">{{ getRuleStatusText(rule.status) }}</div>
+            </div>
+          </div>
+        </div>
+
+    </div>
 
       <!-- 右侧列 -->
-      <div class="right-column">
-        <!-- 实时事件 -->
-        <div class="panel">
-          <div class="panel-header">
-            <h3 class="panel-title">实时事件</h3>
-          </div>
-          <div class="event-list">
-            <div v-for="(event, index) in realTimeEvents" :key="index" class="event-item">
-              <div class="event-tag" :class="event.type">{{ event.typeName }}</div>
-              <div class="event-content">{{ event.content }}</div>
-              <div class="event-time">{{ event.time }}</div>
-            </div>
+    <div class="right-column">
+      <!-- 实时事件 -->
+      <div class="panel">
+        <div class="panel-header">
+          <h3 class="panel-title">实时事件</h3>
+        </div>
+        <div class="event-list">
+          <div v-for="(event, index) in realTimeEvents" :key="index" class="event-item">
+            <div class="event-tag" :class="event.type">{{ event.typeName }}</div>
+            <div class="event-content">{{ event.content }}</div>
+            <div class="event-time">{{ event.time }}</div>
           </div>
         </div>
+      </div>
 
         <!-- Web攻击分布 -->
-        <div class="panel">
-          <div class="panel-header">
-            <h3 class="panel-title">Web 攻击分布</h3>
-          </div>
-          <div class="donut-container">
-            <div class="donut-chart">
-              <AttackTypePie :data="webAttackDistribution" />
-            </div>
-            <div class="donut-legend">
-              <div v-for="attack in webAttackDistribution" :key="attack.type" class="legend-item">
-                <div class="legend-dot" :style="`background-color: ${getAttackColor(attack.type)};`"></div>
-                <span class="legend-label">{{ attack.type }}</span>
-                <span class="legend-value">{{ formatNumber(attack.count) }}</span>
-              </div>
-            </div>
-          </div>
+      <div class="panel">
+        <div class="panel-header">
+          <h3 class="panel-title">Web 攻击分布</h3>
         </div>
-
-        <!-- 黑白名单规则命中分布 -->
-        <div class="panel">
-          <div class="panel-header">
-            <h3 class="panel-title">黑白名单规则命中分布</h3>
+        <div class="donut-container">
+          <div class="donut-chart">
+            <AttackTypePie :data="webAttackDistribution" />
           </div>
-          <div class="rule-list">
-            <div v-for="(rule, index) in blackWhiteRules" :key="index" class="rule-item">
-              <div class="rule-name">{{ rule.name }}</div>
-              <div class="rule-count">{{ formatNumber(rule.count) }}</div>
+          <div class="donut-legend">
+            <div v-for="attack in webAttackDistribution" :key="attack.type" class="legend-item">
+              <div class="legend-dot" :style="`background-color: ${getAttackColor(attack.type)};`"></div>
+              <span class="legend-label">{{ attack.type }}</span>
+              <span class="legend-value">{{ formatNumber(attack.count) }}</span>
             </div>
           </div>
         </div>
       </div>
-    </div>
 
-    <!-- 扩展区域 -->
-    <div class="extended-section">
+      <!-- 威胁等级分布 -->
+      <div class="panel">
+        <div class="panel-header">
+          <h3 class="panel-title">威胁等级分布</h3>
+        </div>
+        <div class="donut-container">
+          <div class="donut-chart">
+            <AttackTypePie :data="threatLevelDistribution" />
+          </div>
+          <div class="donut-legend">
+            <div v-for="item in threatLevelDistribution" :key="item.type" class="legend-item">
+              <div class="legend-dot" :style="`background-color: ${getAttackColor(item.type)};`"></div>
+              <span class="legend-label">{{ item.type }}</span>
+              <span class="legend-value">{{ formatNumber(item.count) }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      
       
 
-      <!-- 防护规则状态 -->
-      <div class="panel protection-rules-panel">
-        <div class="panel-header">
-          <h3 class="panel-title">防护规则状态</h3>
-        </div>
-        <div class="protection-rules-list">
-          <div v-for="(rule, index) in protectionRules" :key="index" class="protection-rule-item">
-            <div class="rule-icon" :class="rule.status">{{ getRuleStatusIcon(rule.status) }}</div>
-            <div class="rule-info">
-              <div class="rule-name">{{ rule.name }}</div>
-              <div class="rule-description">{{ rule.description }}</div>
-            </div>
-            <div class="rule-status" :class="rule.status">{{ getRuleStatusText(rule.status) }}</div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- 底部统计区域 -->
-    <div class="bottom-stats-section">
-      <!-- 安全评分 -->
+      <!-- 安全评分（移动到右侧列） -->
       <div class="panel security-score-panel">
         <div class="panel-header">
           <h3 class="panel-title">安全评分</h3>
@@ -212,8 +243,7 @@
           </div>
         </div>
       </div>
-
-      
+    </div>
     </div>
   </div>
 </template>
@@ -221,50 +251,34 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 // 已移除最近攻击趋势图表的ECharts依赖
-import axios from 'axios'
-// 使用聚合 API 客户端（带鉴权与代理），接入拦截趋势与热门IP
+// 使用统一 API 客户端（带鉴权与代理）
 import { trafficAPI } from '../api/index.js'
+import api from '../api/index.js'
+import { securityAPI } from '../api/securityAPI.js'
 import AttackTrendChart from '../components/dashboard/AttackTrendChart.vue'
 import AttackTypePie from '../components/dashboard/AttackTypePie.vue'
 import BlackWhiteTrend from '../components/dashboard/BlackWhiteTrend.vue'
-import { securityAPI } from '../api/securityAPI.js'
 
 // 加载状态
 const loading = ref(true)
 const error = ref('')
 
-// 统计数据
+// 统计数据（真实接口填充）
 const statCards = ref({
-  attackProtection: 1200,
-  blackWhiteList: 1900,
-  frequencyLimit: 30,
+  attackProtection: 0,
+  blackWhiteList: 0,
+  frequencyLimit: 0,
   waitingRoom: 0,
-  humanMachineVerification: 54,
+  humanMachineVerification: 0,
   identityAuth: 0,
   pageProtect: 0
 })
 
-// 攻击趋势数据
-const attackTrend = ref([
-  { timestamp: '10:00', count: 120 },
-  { timestamp: '11:00', count: 180 },
-  { timestamp: '12:00', count: 220 },
-  { timestamp: '13:00', count: 190 },
-  { timestamp: '14:00', count: 250 },
-  { timestamp: '15:00', count: 300 },
-  { timestamp: '16:00', count: 280 }
-])
+// 攻击趋势数据（真实）
+const attackTrend = ref<{ timestamp: string; count: number }[]>([])
 
-// 黑白名单趋势数据
-const blackWhiteTrend = ref([
-  { timestamp: '10:00', blacklist: 20, whitelist: 5 },
-  { timestamp: '11:00', blacklist: 25, whitelist: 8 },
-  { timestamp: '12:00', blacklist: 30, whitelist: 12 },
-  { timestamp: '13:00', blacklist: 28, whitelist: 10 },
-  { timestamp: '14:00', blacklist: 35, whitelist: 15 },
-  { timestamp: '15:00', blacklist: 40, whitelist: 18 },
-  { timestamp: '16:00', blacklist: 38, whitelist: 16 }
-])
+// 黑白名单趋势（真实）
+const blackWhiteTrend = ref<{ timestamp: string; blacklist: number; whitelist: number }[]>([])
 
 // 已移除：攻击源IP列表（按要求不展示该栏）
 
@@ -298,47 +312,83 @@ const normalizeIpList = (raw: any): { ip: string; count: number }[] => {
   return []
 }
 
-// 实时事件数据
-const realTimeEvents = ref([
-  { type: 'human-machine', typeName: '人机验证', content: '人机验证演示(勿动)', time: '10:12:16' },
-  { type: 'black-white', typeName: '黑白名单', content: '无标题', time: '10:11:45' },
-  { type: 'black-white', typeName: '黑白名单', content: '无标题', time: '10:10:32' },
-  { type: 'human-machine', typeName: '人机验证', content: '人机验证演示(勿动)', time: '10:09:18' },
-  { type: 'black-white', typeName: '黑白名单', content: '无标题', time: '10:08:05' }
-])
+// 实时事件数据（真实）
+const realTimeEvents = ref<{ type: string; typeName: string; content: string; time: string }[]>([])
 
-// Web攻击分布数据
-const webAttackDistribution = ref([
-  { type: '目录穿越', count: 464 },
-  { type: '后门', count: 406 },
-  { type: '信息泄露', count: 272 },
-  { type: '文件包含', count: 51 },
-  { type: '命令注入', count: 18 }
-])
+// Web攻击分布（真实）
+const webAttackDistribution = ref<{ type: string; count: number }[]>([])
 
-// 黑白名单规则数据
-const blackWhiteRules = ref([
-  { name: '长亭社区恶意 IP 情报...', count: 67 },
-  { name: '对内网 IP 加白', count: 2 }
-])
+// 黑白名单规则命中分布（真实）
+const blackWhiteRules = ref<{ name: string; count: number }[]>([])
+const threatLevelDistribution = ref<{ type: string; count: number }[]>([])
 
 // 已移除：安全事件统计、威胁等级分布模块及其数据
 
-// 防护规则状态数据
-const protectionRules = ref([
-  { name: 'SQL注入防护', description: '检测和阻止SQL注入攻击', status: 'active' },
-  { name: 'XSS防护', description: '跨站脚本攻击防护', status: 'active' },
-  { name: 'CSRF防护', description: '跨站请求伪造防护', status: 'active' },
-  { name: '文件上传防护', description: '恶意文件上传检测', status: 'warning' },
-  { name: '目录遍历防护', description: '路径遍历攻击防护', status: 'inactive' },
-  { name: '暴力破解防护', description: '登录暴力破解防护', status: 'active' }
-])
+// 防护规则状态（真实）
+const protectionRules = ref<{ name: string; description: string; status: 'active' | 'warning' | 'inactive' }[]>([])
 
-// 安全评分数据
-const securityScore = ref(85)
-const protectionCoverage = ref(92)
-const responseTime = ref(120)
-const threatDetectionRate = ref(96)
+// 安全评分数据（真实）
+const securityScore = ref(0)
+const protectionCoverage = ref(0)
+const responseTime = ref(0)
+const threatDetectionRate = ref(0)
+
+const attackRangeMode = ref<'preset' | 'custom'>('preset')
+const attackPresetRange = ref<'1h' | '6h' | '24h' | '7d' | '30d'>('24h')
+const attackStartDate = ref('')
+const attackEndDate = ref('')
+const bwRangeMode = ref<'preset' | 'custom'>('preset')
+const bwPresetRange = ref<'1h' | '6h' | '24h' | '7d' | '30d'>('24h')
+const bwStartDate = ref('')
+const bwEndDate = ref('')
+
+const fmt = (n: number) => String(n).padStart(2, '0')
+const labelHour = (d: Date) => `${fmt(d.getMonth()+1)}/${fmt(d.getDate())}-${fmt(d.getHours())}:00`
+const labelDay = (d: Date) => `${fmt(d.getMonth()+1)}/${fmt(d.getDate())}`
+const labelMonth = (d: Date) => `${d.getMonth()+1}月`
+const buildLastMonthsLabels = (count = 12) => {
+  const labels: string[] = []
+  const now = new Date()
+  now.setDate(1)
+  for (let i = count - 1; i >= 0; i--) {
+    const m = new Date(now.getFullYear(), now.getMonth() - i, 1)
+    labels.push(labelMonth(m))
+  }
+  return labels
+}
+const buildLastDaysLabels = (count = 7) => {
+  const labels: string[] = []
+  const now = new Date()
+  for (let i = count - 1; i >= 0; i--) {
+    const d = new Date(now.getTime() - i * 24 * 60 * 60 * 1000)
+    labels.push(labelDay(d))
+  }
+  return labels
+}
+const buildLastHoursLabels = (count = 24) => {
+  const labels: string[] = []
+  const now = new Date()
+  for (let i = count - 1; i >= 0; i--) {
+    const d = new Date(now.getTime() - i * 60 * 60 * 1000)
+    labels.push(labelHour(d))
+  }
+  return labels
+}
+const tryParseDate = (key: any) => {
+  const d = new Date(key)
+  return isNaN(d.getTime()) ? null : d
+}
+const normalizeInterceptSeries = (items: any[], granularity: 'hour' | 'day') => {
+  const out: { timestamp: string; count: number }[] = []
+  for (const it of items || []) {
+    const rawKey = it.time || it.ts || it.key || it.timestamp
+    const d = tryParseDate(rawKey)
+    const label = d ? (granularity === 'day' ? labelDay(d) : labelHour(d)) : String(rawKey)
+    const val = Number(it.value ?? it.count ?? 0) || 0
+    out.push({ timestamp: label, count: val })
+  }
+  return out
+}
 
 // 已移除：最近攻击趋势图表的数据与渲染逻辑
 
@@ -365,6 +415,13 @@ const getAttackColor = (type: string) => {
     '目录穿越': '#1890ff',
     '后门': '#ff8c00',
     '信息泄露': '#52c41a'
+    ,
+    '高危': '#ff4d4f',
+    '中危': '#faad14',
+    '低危': '#52c41a',
+    'high': '#ff4d4f',
+    'medium': '#faad14',
+    'low': '#52c41a'
   }
   return colors[t] || colors[type] || '#666'
 }
@@ -398,50 +455,61 @@ const getRuleStatusText = (status: string) => {
 }
 
 // 根据后端数据结构更新前端数据
-const updateFromBackendData = (statsData: any, securityData: any) => {
-  // 更新顶部统计卡片
+const updateFromBackendData = (health: any) => {
   statCards.value = {
-    attackProtection: statsData.security_events?.total_blocked || 0,
-    blackWhiteList: statsData.rule_info?.total_rules || 0,
-    frequencyLimit: 30, // 暂时保留模拟数据
-    waitingRoom: 0,     // 暂时保留模拟数据
-    humanMachineVerification: 54, // 暂时保留模拟数据
-    identityAuth: 0,    // 暂时保留模拟数据
-    pageProtect: 0      // 暂时保留模拟数据
+    attackProtection: Number(health.request_stats?.blocked) || 0,
+    blackWhiteList: Number(health.rule_info?.total_rules) || 0,
+    frequencyLimit: 0,
+    waitingRoom: 0,
+    humanMachineVerification: 0,
+    identityAuth: 0,
+    pageProtect: 0
   }
 
-  // 更新Web攻击分布
+  const se = health.security_events || {}
   webAttackDistribution.value = [
-    { type: 'XSS攻击', count: statsData.security_events?.xss_attempts || 0 },
-    { type: 'SQL注入', count: statsData.security_events?.sql_injection_attempts || 0 },
-    { type: '命令注入', count: statsData.security_events?.rce_attempts || 0 },
-    { type: '文件包含', count: statsData.security_events?.lfi_attempts || 0 },
-    { type: '目录遍历', count: statsData.security_events?.dir_traversal_attempts || 0 }
+    { type: 'SQL注入', count: Number(se.sql_injection_attempts ?? se.sqli ?? 0) || 0 },
+    { type: 'XSS攻击', count: Number(se.xss_attempts ?? se.xss ?? 0) || 0 },
+    { type: '命令注入', count: Number(se.rce_attempts ?? se.rce ?? 0) || 0 },
+    { type: '文件包含', count: Number(se.lfi_attempts ?? se.lfi ?? 0) || 0 },
+    { type: '目录遍历', count: Number(se.dir_traversal_attempts ?? se.directory_traversal ?? 0) || 0 }
+  ]
+  threatLevelDistribution.value = [
+    { type: '高危', count: Number(se.high_severity ?? 0) || 0 },
+    { type: '中危', count: Number(se.medium_severity ?? 0) || 0 },
+    { type: '低危', count: Number(se.low_severity ?? 0) || 0 }
   ]
 
-  // 已移除：威胁等级分布的更新逻辑
-
-  // 更新防护规则状态
+  const ri = health.rule_info || {}
+  const cats = ri.rule_categories || {}
   protectionRules.value = [
-    { name: 'XSS防护', description: `共${statsData.rule_info?.rule_categories?.xss || 0}条规则`, status: 'active' },
-    { name: 'SQL注入防护', description: `共${statsData.rule_info?.rule_categories?.sqli || 0}条规则`, status: 'active' },
-    { name: '命令注入防护', description: `共${statsData.rule_info?.rule_categories?.rce || 0}条规则`, status: 'active' },
-    { name: '文件包含防护', description: `共${statsData.rule_info?.rule_categories?.lfi || 0}条规则`, status: 'active' },
-    { name: '目录遍历防护', description: `共${statsData.rule_info?.rule_categories?.dir_traversal || 0}条规则`, status: 'active' },
-    { name: '自定义规则', description: `共${statsData.rule_info?.rule_categories?.custom || 0}条规则`, status: 'active' }
+    { name: 'SQL注入防护', description: `规则数 ${cats.sqli ?? cats.sql_injection ?? 0}`, status: 'active' },
+    { name: 'XSS防护', description: `规则数 ${cats.xss ?? 0}`, status: 'active' },
+    { name: '命令注入防护', description: `规则数 ${cats.rce ?? 0}`, status: 'active' },
+    { name: '文件包含防护', description: `规则数 ${cats.lfi ?? 0}`, status: 'active' },
+    { name: '目录遍历防护', description: `规则数 ${cats.dir_traversal ?? cats.directory_traversal ?? 0}`, status: 'active' }
   ]
 
-  // 更新安全评分（基于拦截率和规则状态计算）
-  const blockRate = statsData.request_stats?.block_rate || 0
-  const activeRuleRate = statsData.rule_info?.total_rules > 0 
-    ? (statsData.rule_info.active_rules / statsData.rule_info.total_rules) * 100 
-    : 0
-  
-  securityScore.value = Math.min(100, Math.floor((blockRate * 0.3 + activeRuleRate * 0.7) * 100) / 100)
-  protectionCoverage.value = Math.floor(activeRuleRate)
-  responseTime.value = 120 // 暂时保留模拟数据
-  threatDetectionRate.value = Math.floor(blockRate * 10) // 基于拦截率估算
+  const total = Number(health.request_stats?.total) || 0
+  const blocked = Number(health.request_stats?.blocked) || 0
+  const activeRules = Number(ri.active_rules) || 0
+  const totalRules = Number(ri.total_rules) || 0
+  const blockRate = total > 0 ? blocked / total : 0
+  const activeRuleRate = totalRules > 0 ? activeRules / totalRules : 0
+  securityScore.value = Math.round((blockRate * 0.5 + activeRuleRate * 0.5) * 100)
+  protectionCoverage.value = Math.round(activeRuleRate * 100)
+  threatDetectionRate.value = Math.round(blockRate * 100)
 
+  // 补全顶部卡片其他指标映射（保持风格）
+  const perf = health.performance || {}
+  statCards.value.frequencyLimit = Number(perf.requests_per_second) || 0
+  statCards.value.waitingRoom = Number(perf.concurrent_connections) || 0
+  statCards.value.humanMachineVerification = Number(se.high_severity) || 0
+  statCards.value.identityAuth = Number(ri.active_rules) || 0
+  {
+    const er = Number(perf.error_rate)
+    statCards.value.pageProtect = Number.isFinite(er) ? Number(er.toFixed(3)) : 0
+  }
 }
 
 // 数据加载函数
@@ -449,147 +517,313 @@ const loadData = async () => {
   try {
     loading.value = true
     error.value = ''
-    
-    // 使用代理路径，不再直接调用IP地址
-    const baseURL = '/api'  // 这会通过Vite代理转发到真实后端
-    
     try {
-      // 调用 /system/stats 接口（这个接口数据最全）
-      const statsResponse = await axios.get(`${baseURL}/system/stats`)
-      const statsData = statsResponse.data.data.data
-      
-      // 调用 /system/security 接口作为补充
-      const securityResponse = await axios.get(`${baseURL}/system/security`)
-      const securityData = securityResponse.data.data
-      
-      // 使用后端数据更新前端展示
-      updateFromBackendData(statsData, securityData)
+      const healthRes = await trafficAPI.getSystemHealth()
+      const health = healthRes?.data?.data || {}
+      updateFromBackendData(health)
 
-      // 接入拦截趋势（24小时）
-      try {
-        const interceptRes = await trafficAPI.getInterceptData({ timeRange: '24h' })
-        const interceptData = interceptRes?.data?.data || {}
-        const trend = Array.isArray(interceptData?.data) ? interceptData.data : []
-        attackTrend.value = trend.map(item => ({
-          timestamp: item.time,
-          count: Number(item.value) || 0
-        }))
-
-        // 攻击源IP不从拦截趋势数据解析，改为在WAF统计中获取
-      } catch (e) {
-        console.warn('加载拦截趋势失败，保留现有数据', e)
+      let groupByAttack: 'hour' | 'day' = 'hour'
+      let monthlyAggregateAttack = false
+      const baseParams: any = {}
+      if (attackRangeMode.value === 'preset') {
+        baseParams.timeRange = attackPresetRange.value
+        groupByAttack = attackPresetRange.value === '7d' || attackPresetRange.value === '30d' ? 'day' : 'hour'
+        baseParams.groupBy = groupByAttack
+      } else {
+        if (attackStartDate.value) {
+          const s = new Date(attackStartDate.value)
+          s.setHours(0,0,0,0)
+          baseParams.startTime = s.toISOString()
+        }
+        if (attackEndDate.value) {
+          const e = new Date(attackEndDate.value)
+          e.setHours(23,59,59,999)
+          baseParams.endTime = e.toISOString()
+        }
+        const sDate = attackStartDate.value ? new Date(attackStartDate.value) : null
+        const eDate = attackEndDate.value ? new Date(attackEndDate.value) : null
+        if (sDate && eDate && (eDate.getTime() - sDate.getTime()) >= 48*60*60*1000) {
+          groupByAttack = 'day'
+        }
+        baseParams.groupBy = groupByAttack
       }
-
-      // 已移除：热门访问IP（access/top-ips）加载逻辑，现基于拦截/安全接口提供攻击IP
-
-      // Web攻击分布（WAF统计24h）
+      let totals: any[] = []
+      let ratesArr: any[] = []
+      let interceptTrend: { timestamp: string; count: number }[] = []
+      if (!monthlyAggregateAttack) {
       try {
-        const end = new Date()
-        const start = new Date(end.getTime() - 24 * 60 * 60 * 1000)
-        const wafRes = await trafficAPI.getWafStats({
-          startTime: start.toISOString(),
-          endTime: end.toISOString()
+        const interceptRes = await trafficAPI.getInterceptData({ timeRange: baseParams.timeRange || (attackPresetRange.value as any) })
+        const interceptRaw = interceptRes?.data?.data || interceptRes?.data || []
+        const arr = Array.isArray(interceptRaw?.data) ? interceptRaw.data : (Array.isArray(interceptRaw) ? interceptRaw : [])
+        interceptTrend = normalizeInterceptSeries(arr, groupByAttack)
+        if (groupByAttack === 'day' && (attackPresetRange.value === '7d' || attackPresetRange.value === '30d')) {
+          const labels = buildLastDaysLabels(attackPresetRange.value === '7d' ? 7 : 30)
+          const m = new Map(interceptTrend.map(it => [it.timestamp, it.count]))
+          interceptTrend = labels.map(l => ({ timestamp: l, count: m.get(l) || 0 }))
+        }
+      } catch {}
+        if (!interceptTrend.length) {
+          const statsTotalRes = await trafficAPI.getLogsStats({ ...baseParams, metric: 'count' })
+          const statsRateRes = await trafficAPI.getLogsStats({ ...baseParams, metric: 'blocked_rate' })
+          totals = Array.isArray(statsTotalRes?.data?.data) ? statsTotalRes.data.data : []
+          ratesArr = Array.isArray(statsRateRes?.data?.data) ? statsRateRes.data.data : []
+        }
+      }
+      const rateMap = new Map<string, number>(ratesArr.map((r: any) => [String(r.key || r.time || r.ts), Number(r.value || r.rate) || 0]))
+      if (interceptTrend.length) {
+        attackTrend.value = interceptTrend
+      } else if (monthlyAggregateAttack) {
+        const monthMap = new Map<string, number>()
+        totals.forEach((t: any) => {
+          const rawKey = String(t.key || t.time || t.ts)
+          const d = tryParseDate(rawKey)
+          if (!d) return
+          const totalVal = Number(t.value || t.count) || 0
+          const rate = rateMap.get(rawKey) || 0
+          const blocked = Math.round(totalVal * rate)
+          const mLabel = labelMonth(d)
+          monthMap.set(mLabel, (monthMap.get(mLabel) || 0) + blocked)
         })
-        const wafData = wafRes?.data?.data || {}
-        const topAttacks = Array.isArray(wafData?.topAttacks) ? wafData.topAttacks : []
-        webAttackDistribution.value = topAttacks.map(a => ({ type: a.type, count: Number(a.count) || 0 }))
+        const labels = buildLastMonthsLabels(12)
+        attackTrend.value = labels.map(l => ({ timestamp: l, count: monthMap.get(l) || 0 }))
+      } else {
+        attackTrend.value = totals.map((t: any) => {
+          const rawKey = String(t.key || t.time || t.ts)
+          const totalVal = Number(t.value || t.count) || 0
+          const rate = rateMap.get(rawKey) || 0
+          const d = tryParseDate(rawKey)
+          const label = d ? (groupByAttack === 'day' ? labelDay(d) : labelHour(d)) : rawKey
+          return { timestamp: label, count: Math.round(totalVal * rate) }
+        })
+      }
 
-        // 攻击源IP：优先使用WAF统计中的IP列表，保持与攻击防护趋势数据时间范围一致
-        try {
-          const rawIps = Array.isArray(wafData?.topIps) ? wafData.topIps
-            : (Array.isArray(wafData?.attackIps) ? wafData.attackIps : null)
-          let ipList = normalizeIpList(rawIps)
-          if (ipList.length === 0) {
-            // 回退到安全接口提供的攻击源IP
-            const secRes = await securityAPI.getAttackSourceIPs({ timeRange: '24h', limit: 10 })
-            const secData = secRes?.data?.data
-            ipList = normalizeIpList(secData)
+      // 若趋势为空，生成近24小时的平面零值曲线
+      if (attackTrend.value.length === 0) {
+        const now = new Date()
+        const baseline: { timestamp: string; count: number }[] = []
+        if (groupByAttack === 'hour') {
+          for (let i = 23; i >= 0; i--) {
+            const d = new Date(now.getTime() - i * 60 * 60 * 1000)
+            baseline.push({ timestamp: labelHour(d), count: 0 })
           }
-          attackInterceptIPs.value = ipList
-            .sort((a, b) => (b.count || 0) - (a.count || 0))
-            .slice(0, 10)
-        } catch (e) {
-          console.warn('设置攻击源IP失败，保留现有数据', e)
+        } else {
+          if (monthlyAggregateAttack) {
+            const labels = buildLastMonthsLabels(12)
+            labels.forEach(l => baseline.push({ timestamp: l, count: 0 }))
+          } else {
+            const days = attackPresetRange.value === '7d' ? 7 : 30
+            for (let i = days - 1; i >= 0; i--) {
+              const d = new Date(now.getTime() - i * 24 * 60 * 60 * 1000)
+              baseline.push({ timestamp: labelDay(d), count: 0 })
+            }
+          }
         }
-      } catch (e) {
-        console.warn('加载Web攻击分布失败，保留现有数据', e)
+        attackTrend.value = baseline
       }
 
-      // 黑白名单趋势（24h）
-      try {
-        const bwRes = await securityAPI.getBlackWhiteTrend({ timeRange: '24h' })
-        const bwArr = Array.isArray(bwRes?.data?.data) ? bwRes.data.data : []
-        blackWhiteTrend.value = bwArr.map(d => ({
-          timestamp: d.time || d.timestamp,
-          blacklist: Number(d.blacklist ?? d.black) || 0,
-          whitelist: Number(d.whitelist ?? d.white) || 0
-        }))
-      } catch (e) {
-        console.warn('加载黑白名单趋势失败，保留现有数据', e)
-      }
-
-      // 实时事件（合并WAF与访问日志）
-      try {
-        const realRes = await trafficAPI.getRealtimeLogs()
-        const wafLogs = Array.isArray(realRes?.data?.data?.waf) ? realRes.data.data.waf : []
-        const accessLogs = Array.isArray(realRes?.data?.data?.access) ? realRes.data.data.access : []
-        const wafEvents = wafLogs.slice(0, 5).map(l => ({
-          type: 'waf',
-          typeName: 'WAF审计',
-          content: `${l.method} ${l.uri} ${l.action}${l.ruleId ? ' #' + l.ruleId : ''}`,
-          time: new Date(l.time).toLocaleTimeString('zh-CN', { hour12: false })
-        }))
-        const accessEvents = accessLogs.slice(0, 5).map(l => ({
-          type: 'access',
-          typeName: '访问日志',
-          content: `${l.method} ${l.uri} ${l.status}`,
-          time: new Date(l.time).toLocaleTimeString('zh-CN', { hour12: false })
-        }))
-        realTimeEvents.value = [...wafEvents, ...accessEvents].slice(0, 5)
-      } catch (e) {
-        console.warn('加载实时事件失败，保留现有数据', e)
-      }
-
-      // 加载性能指标用于响应时间
-      try {
-        const perfRes = await trafficAPI.getPerformanceData()
-        const perf = perfRes?.data?.data || {}
-        const avg = Number(perf.avg_response_time ?? perf.response_time)
-        if (!Number.isNaN(avg) && avg > 0) {
-          responseTime.value = Math.floor(avg)
+      const ipParams: any = { groupBy: 'ip', metric: 'count' }
+      if (attackRangeMode.value === 'preset') {
+        ipParams.timeRange = attackPresetRange.value
+      } else {
+        if (attackStartDate.value) {
+          const s = new Date(attackStartDate.value)
+          s.setHours(0,0,0,0)
+          ipParams.startTime = s.toISOString()
         }
+        if (attackEndDate.value) {
+          const e = new Date(attackEndDate.value)
+          e.setHours(23,59,59,999)
+          ipParams.endTime = e.toISOString()
+        }
+      }
+      const ipStatsRes = await trafficAPI.getLogsStats(ipParams)
+      const ipData = Array.isArray(ipStatsRes?.data?.data) ? ipStatsRes.data.data : []
+      attackInterceptIPs.value = normalizeIpList(ipData.map((d: any) => ({ ip: d.key || d.ip, count: d.value || d.count || 0 })))
+
+      let groupByBw: 'hour' | 'day' = 'hour'
+      let monthlyAggregateBw = false
+      const bwParamsCount: any = { metric: 'count' }
+      const bwParamsRate: any = { metric: 'blocked_rate' }
+      if (bwRangeMode.value === 'preset') {
+        bwParamsCount.timeRange = bwPresetRange.value
+        bwParamsRate.timeRange = bwPresetRange.value
+        groupByBw = bwPresetRange.value === '7d' || bwPresetRange.value === '30d' ? 'day' : 'hour'
+        bwParamsCount.groupBy = groupByBw
+        bwParamsRate.groupBy = groupByBw
+      } else {
+        if (bwStartDate.value) {
+          const s2 = new Date(bwStartDate.value)
+          s2.setHours(0,0,0,0)
+          bwParamsCount.startTime = s2.toISOString()
+          bwParamsRate.startTime = s2.toISOString()
+        }
+        if (bwEndDate.value) {
+          const e2 = new Date(bwEndDate.value)
+          e2.setHours(23,59,59,999)
+          bwParamsCount.endTime = e2.toISOString()
+          bwParamsRate.endTime = e2.toISOString()
+        }
+        const s2Date = bwStartDate.value ? new Date(bwStartDate.value) : null
+        const e2Date = bwEndDate.value ? new Date(bwEndDate.value) : null
+        if (s2Date && e2Date && (e2Date.getTime() - s2Date.getTime()) >= 48*60*60*1000) {
+          groupByBw = 'day'
+        }
+        bwParamsCount.groupBy = groupByBw
+        bwParamsRate.groupBy = groupByBw
+      }
+      let bwTotals: any[] = []
+      let bwRates: any[] = []
+      if (!monthlyAggregateBw) {
+        const bwTotalRes = await trafficAPI.getLogsStats(bwParamsCount)
+        const bwRateRes = await trafficAPI.getLogsStats(bwParamsRate)
+        bwTotals = Array.isArray(bwTotalRes?.data?.data) ? bwTotalRes.data.data : []
+        bwRates = Array.isArray(bwRateRes?.data?.data) ? bwRateRes.data.data : []
+      }
+      const bwRateMap = new Map<string, number>(bwRates.map((r: any) => [String(r.key || r.time || r.ts), Number(r.value || r.rate) || 0]))
+      if (monthlyAggregateBw) {
+        const monthMapBlack = new Map<string, number>()
+        const monthMapWhite = new Map<string, number>()
+        bwTotals.forEach((t: any) => {
+          const rawKey = String(t.key || t.time || t.ts)
+          const d = tryParseDate(rawKey)
+          if (!d) return
+          const totalVal = Number(t.value || t.count) || 0
+          const rate = bwRateMap.get(rawKey) || 0
+          const black = Math.round(totalVal * rate)
+          const white = Math.max(0, totalVal - black)
+          const mLabel = labelMonth(d)
+          monthMapBlack.set(mLabel, (monthMapBlack.get(mLabel) || 0) + black)
+          monthMapWhite.set(mLabel, (monthMapWhite.get(mLabel) || 0) + white)
+        })
+        const labels = buildLastMonthsLabels(12)
+        blackWhiteTrend.value = labels.map(l => ({ timestamp: l, blacklist: monthMapBlack.get(l) || 0, whitelist: monthMapWhite.get(l) || 0 }))
+      } else if (groupByBw === 'day') {
+        const agg = new Map<string, { b: number; w: number; t: number }>()
+        bwTotals.forEach((t: any) => {
+          const rawKey = String(t.key || t.time || t.ts)
+          const d = tryParseDate(rawKey)
+          const label = d ? labelDay(d) : rawKey
+          const totalVal = Number(t.value || t.count) || 0
+          const rate = bwRateMap.get(rawKey) || 0
+          const black = Math.round(totalVal * rate)
+          const white = Math.max(0, totalVal - black)
+          const prev = agg.get(label)
+          const tm = d ? d.getTime() : Date.now()
+          if (prev) agg.set(label, { b: prev.b + black, w: prev.w + white, t: Math.max(prev.t, tm) })
+          else agg.set(label, { b: black, w: white, t: tm })
+        })
+        if (bwRangeMode.value === 'preset') {
+          const labels = buildLastDaysLabels(bwPresetRange.value === '7d' ? 7 : 30)
+          blackWhiteTrend.value = labels.map(l => ({ timestamp: l, blacklist: agg.get(l)?.b || 0, whitelist: agg.get(l)?.w || 0 }))
+        } else {
+          blackWhiteTrend.value = Array.from(agg.entries()).sort((a, b) => a[1].t - b[1].t).map(([label, v]) => ({ timestamp: label, blacklist: v.b, whitelist: v.w }))
+        }
+      } else {
+        const aggH = new Map<string, { b: number; w: number; t: number }>()
+        bwTotals.forEach((t: any) => {
+          const rawKey = String(t.key || t.time || t.ts)
+          const d = tryParseDate(rawKey)
+          const label = d ? labelHour(d) : rawKey
+          const totalVal = Number(t.value || t.count) || 0
+          const rate = bwRateMap.get(rawKey) || 0
+          const black = Math.round(totalVal * rate)
+          const white = Math.max(0, totalVal - black)
+          const prev = aggH.get(label)
+          const tm = d ? d.getTime() : Date.now()
+          if (prev) aggH.set(label, { b: prev.b + black, w: prev.w + white, t: Math.max(prev.t, tm) })
+          else aggH.set(label, { b: black, w: white, t: tm })
+        })
+        if (bwRangeMode.value === 'preset') {
+          const cnt = bwPresetRange.value === '1h' ? 1 : (bwPresetRange.value === '6h' ? 6 : 24)
+          const labels = buildLastHoursLabels(cnt)
+          blackWhiteTrend.value = labels.map(l => ({ timestamp: l, blacklist: aggH.get(l)?.b || 0, whitelist: aggH.get(l)?.w || 0 }))
+        } else {
+          blackWhiteTrend.value = Array.from(aggH.entries()).sort((a, b) => a[1].t - b[1].t).map(([label, v]) => ({ timestamp: label, blacklist: v.b, whitelist: v.w }))
+        }
+      }
+
+      // 若黑白名单趋势为空，生成与趋势一致的平面零值曲线
+      if (blackWhiteTrend.value.length === 0) {
+        if (groupByBw === 'hour') {
+          const now2 = new Date()
+          const tmp: { timestamp: string; blacklist: number; whitelist: number }[] = []
+          for (let i = 23; i >= 0; i--) {
+            const d2 = new Date(now2.getTime() - i * 60 * 60 * 1000)
+            tmp.push({ timestamp: labelHour(d2), blacklist: 0, whitelist: 0 })
+          }
+          blackWhiteTrend.value = tmp
+        } else {
+          if (monthlyAggregateBw) {
+            const labels = buildLastMonthsLabels(12)
+            blackWhiteTrend.value = labels.map(l => ({ timestamp: l, blacklist: 0, whitelist: 0 }))
+          } else {
+            const now2 = new Date()
+            const tmp: { timestamp: string; blacklist: number; whitelist: number }[] = []
+            const days2 = bwPresetRange.value === '7d' ? 7 : 30
+            for (let i = days2 - 1; i >= 0; i--) {
+              const d2 = new Date(now2.getTime() - i * 24 * 60 * 60 * 1000)
+              tmp.push({ timestamp: labelDay(d2), blacklist: 0, whitelist: 0 })
+            }
+            blackWhiteTrend.value = tmp
+          }
+        }
+      }
+
+      const perfRes = await trafficAPI.getPerformanceData({ timeRange: '24h', metric: 'response_time', interval: '1h' })
+      const perf = perfRes?.data?.data || {}
+      const avg = Number(perf?.summary?.avg ?? perf.avg_response_time ?? perf.response_time)
+      responseTime.value = !Number.isNaN(avg) && avg > 0 ? Math.floor(avg) : 0
+
+      // 黑白名单规则命中分布（优先 security 接口）
+      try {
+        const bwRulesRes = await securityAPI.getBlackWhiteRules({ timeRange: '24h', limit: 10 })
+        const rulesArr = Array.isArray(bwRulesRes?.data?.data) ? bwRulesRes.data.data : []
+        blackWhiteRules.value = rulesArr
+          .map((r: any) => ({ name: r.name || r.ruleName || r.id?.toString() || '未知规则', count: Number(r.count ?? r.hits ?? 0) }))
       } catch (e) {
-        console.warn('加载性能指标失败，保留现有响应时间', e)
+        // 回退至 /logs/waf/stats.topRules
+        try {
+          const end = new Date()
+          const start = new Date(end.getTime() - 24 * 60 * 60 * 1000)
+          const wafStats = await trafficAPI.getWafStats({ startTime: start.toISOString(), endTime: end.toISOString() })
+          const topRules = Array.isArray(wafStats?.data?.data?.topRules) ? wafStats.data.data.topRules : []
+          blackWhiteRules.value = topRules.map((x: any) => ({ name: String(x.ruleId ?? x.name ?? '未知'), count: Number(x.count ?? 0) }))
+        } catch (ee) {
+          console.warn('黑白名单规则命中数据不可用', ee)
+        }
+      }
+
+      try {
+        const realRes = await trafficAPI.getRealtimeLogs({ limit: 10 })
+        const wafItems = Array.isArray(realRes?.data?.data?.waf) ? realRes.data.data.waf : []
+        const accessItems = Array.isArray(realRes?.data?.data?.access) ? realRes.data.data.access : []
+        const base = wafItems.length ? wafItems.slice(0, 10) : accessItems.slice(0, 10)
+        const isWaf = !!wafItems.length
+        realTimeEvents.value = base.map((l: any) => ({
+          type: isWaf ? 'waf' : 'access',
+          typeName: isWaf ? 'WAF审计' : '访问日志',
+          content: isWaf ? `${l.method} ${l.uri} ${l.finalAction}` : `${l.method} ${l.uri} ${l.status}`,
+          time: new Date((l.time || l.ts) || Date.now()).toLocaleTimeString('zh-CN', { hour12: false })
+        }))
+      } catch (e) {
+        console.warn('实时事件不可用', e)
       }
     } catch (apiError) {
-      console.warn('API调用失败，使用模拟数据:', apiError)
-      // API失败时使用模拟数据
-      updateMockData()
+      console.warn('API调用失败:', apiError)
+      throw apiError
     }
-    
     loading.value = false
   } catch (err) {
-    error.value = '数据加载失败，使用模拟数据展示'
+    error.value = '数据加载失败，请稍后重试'
     loading.value = false
     console.error('加载安全态势数据失败:', err)
-    updateMockData() // 确保有数据展示
   }
 }
 
-// 模拟数据更新函数（可选）
-const updateMockData = () => {
-  // 保留原有的时间更新逻辑
-  const now = new Date()
-  const currentHour = now.getHours()
-  
-  // 模拟实时事件时间更新
-  realTimeEvents.value = realTimeEvents.value.map((event, index) => ({
-    ...event,
-    time: `${String(currentHour).padStart(2, '0')}:${String(now.getMinutes() - index).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`
-  }))
-  
-  // 不再随机调整安全评分，因为现在使用真实数据
-}
+const applyAttackRange = async () => { await loadData() }
+const applyBwRange = async () => { await loadData() }
+
+// 已移除模拟数据更新
 
 onMounted(async () => {
   // 初始化加载后端数据（已移除最近攻击趋势图表初始化）
@@ -691,6 +925,28 @@ onMounted(async () => {
   gap: 24px;
 }
 
+.controls-row {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.panel-controls {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.control-input {
+  padding: 8px 12px;
+  border: 1px solid rgba(74,158,255,0.3);
+  border-radius: 6px;
+  background: rgba(30,30,30,0.8);
+  color: #e0e0e0;
+  font-size: 14px;
+}
+
 .left-column, .right-column {
   flex: 1;
   display: flex;
@@ -758,7 +1014,7 @@ onMounted(async () => {
 
 /* 图表容器 */
 .chart-container {
-  height: 300px;
+  height: 220px;
 }
 
 /* DataV 边框容器适配 */
@@ -884,25 +1140,30 @@ onMounted(async () => {
 /* 饼图容器 */
 .donut-container {
   display: flex;
-  gap: 20px;
+  gap: 16px;
+  flex-wrap: wrap;
 }
 
 .donut-chart {
-  flex: 1;
-  height: 200px;
+  flex: 1 1 320px;
+  height: 180px;
 }
 
 .donut-legend {
-  flex: 1;
+  flex: 1 1 320px;
   display: flex;
   flex-direction: column;
   justify-content: center;
+  max-height: 180px;
+  overflow-y: auto;
+  padding-right: 8px;
 }
 
 .legend-item {
   display: flex;
   align-items: center;
   margin-bottom: 8px;
+  line-height: 1.2;
 }
 
 .legend-dot {
