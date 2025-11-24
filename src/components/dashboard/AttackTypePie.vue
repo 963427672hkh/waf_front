@@ -33,6 +33,14 @@ const getAttackColor = (type: string) => {
     '目录穿越': '#1890ff',
     '后门': '#ff8c00',
     '信息泄露': '#52c41a'
+    ，
+     // 威胁等级
+    '高危': '#ff4d4f',
+    '中危': '#faad14',
+    '低危': '#52c41a',
+    'high': '#ff4d4f',
+    'medium': '#faad14',
+    'low': '#52c41a'
   }
   return colors[t] || colors[type] || '#666'
 }
