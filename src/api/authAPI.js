@@ -19,7 +19,6 @@ export const authAPI = {
       { headers: { 'Content-Type': 'application/json' ,
         Authorization: `Bearer ${refreshToken}`} }
     )
-    console.log('1111',response)
     return response.data
   },
 

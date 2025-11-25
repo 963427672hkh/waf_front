@@ -443,7 +443,8 @@ const loadRules = async () => {
     if (filters.search) params.search = filters.search
     
     const response = await rulesAPI.getRules(params)
-    
+    // console.log('111',response)
+
     if (response.data?.code === 200) {
       const data = response.data.data || {}
       rules.value = data.items || []

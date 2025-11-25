@@ -104,13 +104,13 @@
                 <span class="alert-level" :class="`badge-${alert.level}`">
                   {{ getLevelLabel(alert.level) }}
                 </span>
-                <span class="alert-type">{{ getTypeLabel(alert.type) }}</span>
-                <h3 class="alert-title">{{ alert.title }}</h3>
+                <span class="alert-type">{{ getTypeLabel(alert.alertType) }}</span>
+                <h3 class="alert-title">{{ alert.subject }}</h3>
                 <span class="alert-time">{{ formatTime(alert.createdAt) }}</span>
               </div>
             </div>
             <div class="alert-body">
-              <div class="alert-message">{{ alert.message }}</div>
+              <div class="alert-message">{{ alert.content }}</div>
               <div class="alert-meta">
                 <span v-if="alert.sourceIP" class="meta-item">
                   <span class="meta-label">来源IP:</span>
@@ -184,7 +184,7 @@
             <div class="detail-grid">
               <div class="detail-item">
                 <label>告警标题:</label>
-                <span>{{ detailAlert.title }}</span>
+                <span>{{ detailAlert.subject }}</span>
               </div>
               <div class="detail-item">
                 <label>告警级别:</label>
@@ -192,7 +192,7 @@
               </div>
               <div class="detail-item">
                 <label>告警类型:</label>
-                <span>{{ getTypeLabel(detailAlert.type) }}</span>
+                <span>{{ getTypeLabel(detailAlert.alertType) }}</span>
               </div>
               <div class="detail-item">
                 <label>告警状态:</label>
@@ -210,7 +210,7 @@
           </div>
           <div class="detail-section">
             <h3>告警内容</h3>
-            <div class="detail-message">{{ detailAlert.message }}</div>
+            <div class="detail-message">{{ detailAlert.alertData.message }}</div>
           </div>
           <div class="detail-section" v-if="detailAlert.sourceIP || detailAlert.target">
             <h3>相关信息</h3>
@@ -337,7 +337,8 @@ const totalPages = computed(() => Math.ceil(totalCount.value / pageSize.value))
 
 const filteredAlerts = computed(() => {
   let result = [...alerts.value]
-  
+  console.log('123123result',result)
+
   // 状态筛选
   if (filterStatus.value) {
     result = result.filter(alert => alert.status === filterStatus.value)
@@ -381,26 +382,29 @@ const loadAlerts = async () => {
     }
     
     const response = await alertAPI.getAlerts(params)
-    
+    console.log('111response',response)
+
     if (response.data?.code === 200) {
       const data = response.data.data || {}
-      alerts.value = data.list || []
+      alerts.value = data.recentAlerts || []
+      console.log('222alerts.value',alerts.value)
       totalCount.value = data.total || 0
     } else {
-      // 如果API未实现，使用模拟数据
-      const mockAlerts = generateMockAlerts()
-      alerts.value = mockAlerts
-      totalCount.value = mockAlerts.length
+      // // 如果API未实现，使用模拟数据
+      // const mockAlerts = generateMockAlerts()
+      // alerts.value = mockAlerts
+      // totalCount.value = mockAlerts.length
+      console.log('获取告警数据失败',response)
     }
     
     // 注意：不在这里调用 updateStats()，因为统计数据应该基于全部数据
     // 只有在加载全部数据时才更新统计
   } catch (error) {
     console.error('加载告警列表失败:', error)
-    // 使用模拟数据
-    const mockAlerts = generateMockAlerts()
-    alerts.value = mockAlerts
-    totalCount.value = mockAlerts.length
+    // // 使用模拟数据
+    // const mockAlerts = generateMockAlerts()
+    // alerts.value = mockAlerts
+    // totalCount.value = mockAlerts.length
   } finally {
     loading.value = false
   }
@@ -418,18 +422,19 @@ const loadAllAlertsForStats = async () => {
     
     if (response.data?.code === 200) {
       const data = response.data.data || {}
-      allAlerts.value = data.list || []
+      allAlerts.value = data.recentAlerts || []
     } else {
       // 如果API未实现，使用模拟数据
-      allAlerts.value = generateMockAlerts()
+      console.log('加载全部告警数据失败',response)
+      // allAlerts.value = generateMockAlerts()
     }
     
     updateStats()
   } catch (error) {
     console.error('加载全部告警数据失败:', error)
-    // 使用模拟数据
-    allAlerts.value = generateMockAlerts()
-    updateStats()
+    // // 使用模拟数据
+    // allAlerts.value = generateMockAlerts()
+    // updateStats()
   }
 }
 
@@ -504,7 +509,8 @@ const toggleExpand = async (alertId) => {
     expandedAlert.value = alertId
     // 加载详情
     try {
-      const response = await alertAPI.getAlertDetail(alertId)
+      // const response = await alertAPI.getAlertDetail(alertId)
+      const response = alerts.value
       if (response.data?.code === 200) {
         detailAlert.value = response.data.data
       } else {
@@ -700,11 +706,11 @@ const handleWebSocketMessage = (data) => {
 // 工具函数
 const getLevelLabel = (level) => {
   const labels = {
-    critical: '严重',
-    high: '高',
-    medium: '中',
-    low: '低',
-    info: '信息'
+    CRITICAL: '严重',
+    HIGH: '高',
+    MEDIUM: '中',
+    LOW: '低',
+    INFO: '信息'
   }
   return labels[level] || level
 }
@@ -736,35 +742,35 @@ const formatTime = (timeStr) => {
   return date.toLocaleString('zh-CN')
 }
 
-// 生成模拟数据（用于测试）
-const generateMockAlerts = () => {
-  const levels = ['critical', 'high', 'medium', 'low', 'info']
-  const types = ['attack', 'traffic', 'security', 'system', 'unknown']
-  const statuses = ['pending', 'processing', 'resolved']
-  const mockAlerts = []
+// // 生成模拟数据（用于测试）
+// const generateMockAlerts = () => {
+//   const levels = ['critical', 'high', 'medium', 'low', 'info']
+//   const types = ['attack', 'traffic', 'security', 'system', 'unknown']
+//   const statuses = ['pending', 'processing', 'resolved']
+//   const mockAlerts = []
   
-  for (let i = 0; i < 15; i++) {
-    const level = levels[Math.floor(Math.random() * levels.length)]
-    const type = types[Math.floor(Math.random() * types.length)]
-    const status = statuses[Math.floor(Math.random() * statuses.length)]
+//   for (let i = 0; i < 15; i++) {
+//     const level = levels[Math.floor(Math.random() * levels.length)]
+//     const type = types[Math.floor(Math.random() * types.length)]
+//     const status = statuses[Math.floor(Math.random() * statuses.length)]
     
-    mockAlerts.push({
-      id: `alert-${i + 1}`,
-      title: `告警 ${i + 1}: ${getTypeLabel(type)}`,
-      message: `检测到${getTypeLabel(type)}，需要及时处理`,
-      level,
-      type,
-      status,
-      sourceIP: `192.168.${Math.floor(Math.random() * 255)}.${Math.floor(Math.random() * 255)}`,
-      target: `example.com${i % 3 === 0 ? '/api' : ''}`,
-      createdAt: new Date(Date.now() - Math.random() * 7 * 24 * 60 * 60 * 1000).toISOString(),
-      progress: status === 'processing' ? Math.floor(Math.random() * 100) : (status === 'resolved' ? 100 : 0),
-      handler: status === 'processing' || status === 'resolved' ? '管理员' : null
-    })
-  }
+//     mockAlerts.push({
+//       id: `alert-${i + 1}`,
+//       title: `告警 ${i + 1}: ${getTypeLabel(type)}`,
+//       message: `检测到${getTypeLabel(type)}，需要及时处理`,
+//       level,
+//       type,
+//       status,
+//       sourceIP: `192.168.${Math.floor(Math.random() * 255)}.${Math.floor(Math.random() * 255)}`,
+//       target: `example.com${i % 3 === 0 ? '/api' : ''}`,
+//       createdAt: new Date(Date.now() - Math.random() * 7 * 24 * 60 * 60 * 1000).toISOString(),
+//       progress: status === 'processing' ? Math.floor(Math.random() * 100) : (status === 'resolved' ? 100 : 0),
+//       handler: status === 'processing' || status === 'resolved' ? '管理员' : null
+//     })
+//   }
   
-  return mockAlerts.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
-}
+//   return mockAlerts.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+// }
 
 // 生命周期
 onMounted(async () => {

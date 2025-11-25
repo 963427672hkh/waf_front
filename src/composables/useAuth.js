@@ -167,7 +167,7 @@ export function useAuth() {
       const { data } = response
       
       // 更新访问令牌
-      setTokens(data.access_token, refreshToken.value)
+      setTokens(data.accessToken, refreshToken.value)
       
       // 重新设置自动刷新
       setupTokenRefresh(data.expires_in)

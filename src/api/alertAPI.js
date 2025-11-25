@@ -6,13 +6,13 @@ const api = apiClient.client
 // 告警管理相关API接口
 export const alertAPI = {
   // 获取告警列表
-  getAlerts: (params = {}) => api.get('/alerts', { params }),
+  getAlerts: (params = {}) => api.get('/alerts/stats', { params }),
   
   // 获取单个告警详情
-  getAlertDetail: (alertId) => api.get(`/alerts/${alertId}`),
+  // getAlertDetail: (alertId) => api.get(`/alerts/${alertId}`),
   
   // 获取告警统计信息
-  getAlertStats: (params = {}) => api.get('/alerts/stats', { params }),
+  // getAlertStats: (params = {}) => api.get('/alerts/stats', { params }),
   
   // 更新告警状态
   updateAlertStatus: (alertId, status) => api.put(`/alerts/${alertId}/status`, { status }),
