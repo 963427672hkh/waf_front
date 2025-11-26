@@ -1,106 +1,181 @@
 <template>
-  <div class="waf-dashboard">
-    <div class="header">
-      <div class="stats">
-        <div class="card" v-for="card in statCards" :key="card.key">
-          <div class="title">{{ card.title }}</div>
-          <div class="value">{{ stats[card.key] }}</div>
+  <div class="dashboard-container">
+    <aside class="left-panel">
+      <div class="stat-card" v-for="(item, idx) in statCards" :key="idx">
+        <div class="stat-title">{{ item.title }}</div>
+        <div class="stat-number" :class="{ danger: item.key === 'blocked' }">
+          {{ formatNumber(stats[item.key]) }}
         </div>
       </div>
-      <div class="clock">{{ currentTime }}</div>
-    </div>
+    </aside>
 
-    <div class="content">
-      <div id="worldMap" class="map" />
-      <aside class="sidebar">
-        <h3>最近攻击</h3>
-        <ul class="attack-list">
-          <li v-for="a in attacks" :key="a.id" class="attack-item">
-            <div class="attack-title">{{ a.ip || a.location }}</div>
-            <div class="attack-meta">次数: {{ a.count }} · {{ a.time }}</div>
-          </li>
-        </ul>
-      </aside>
-    </div>
+    <main class="map-panel">
+      <div id="worldMap" class="map"></div>
+
+      <transition name="fade">
+        <div v-if="hoverInfo" class="tooltip" :style="tooltipStyle">
+          <div v-if="hoverInfo.type === 'country'">
+            <div class="tt-row"><span class="label">国家:</span> {{ hoverInfo.name }}</div>
+            <div class="tt-row"><span class="label">攻击:</span> {{ hoverInfo.count }} 次</div>
+            <div class="tt-row"><span class="label">最新:</span> {{ hoverInfo.time }}</div>
+          </div>
+          
+          <div v-else>
+            <div class="tt-title">{{ hoverInfo.location }}</div>
+            <div class="tt-ip">{{ hoverInfo.ip }}</div>
+            <div class="tt-ip" style="font-size:11px; color:#aaa; margin-top:2px">{{ hoverInfo.time }}</div>
+          </div>
+        </div>
+      </transition>
+    </main>
+
+    <aside class="right-panel">
+      <div class="attack-card">
+        <div class="attack-header">
+          <h3>实时 Web 攻击</h3>
+          <div class="clock">{{ currentTime }}</div>
+        </div>
+
+        <div class="attack-scroll">
+          <ul class="attack-list">
+            <li v-for="(attack, idx) in attacks" :key="attack.id || idx"
+                @mouseenter="handleListHover(attack)"
+                @mouseleave="hoverInfo = null">
+              <div class="left">
+                <span class="rank">{{ idx + 1 }}</span>
+                <div class="row1">
+                  <span class="ip">{{ attack.ip }}</span>
+                  <span class="loc">{{ attack.location }}</span>
+                </div>
+                <div class="row2">
+                  <span class="time">{{ formatTime(attack.time) }}</span>
+                  <span class="count">{{ attack.count }} 次</span>
+                </div>
+              </div>
+            </li>
+          </ul>
+        </div>
+      </div>
+    </aside>
   </div>
 </template>
 
 <script setup>
 import { ref, reactive, onMounted, onBeforeUnmount } from 'vue'
 import * as echarts from 'echarts'
+// 引入你的接口模块
+import { trafficAPI } from '../api/index.js'
+import { securityAPI } from '../api/securityAPI.js'
 
-// --------------------- 全局配置 ---------------------
-const API_BASE = 'http://47.109.154.103:3000' // ✅ 后端接口地址
-const WS_URL = 'ws://47.109.154.103:3000/ws'  // ✅ 后端 WebSocket 地址
-
+// --------------------- 数据定义 ---------------------
 const stats = reactive({ visitors: 0, requests: 0, blocked: 0 })
-const attacks = reactive([])
+const attacks = reactive([]) // 实时攻击列表
+const regionStats = ref({})  // 每个国家的攻击总数 (24h)
+const countryLastTimeMap = ref({}) // 【新增】每个国家最新攻击时间
+
 const statCards = [
   { title: '近24小时独立访客', key: 'visitors' },
   { title: '近24小时访问次数', key: 'requests' },
   { title: '近24小时拦截次数', key: 'blocked' },
 ]
 
-let ws = null
-let chart = null
-let heartbeatTimer = null
-
+// tooltip 相关
 const hoverInfo = ref(null)
 const tooltipStyle = ref({ left: '0px', top: '0px' })
 
-// --------------------- 时间 ---------------------
+// 顶部时钟
 const currentTime = ref('')
-function updateClock() { currentTime.value = new Date().toLocaleString() }
-setInterval(updateClock, 1000)
+const updateClock = () => { currentTime.value = new Date().toLocaleString() }
+let clockTimer = null
 
-// --------------------- 经纬度缓存 ---------------------
-const geoCache = new Map()
-async function getGeo(ip) {
-  if (geoCache.has(ip)) return geoCache.get(ip)
+// --------------------- 辅助函数 ---------------------
+const formatNumber = (num) => num ? num.toLocaleString() : '0'
+
+// 格式化时间为 HH:mm:ss
+const formatTime = (timeStr) => {
+  if (!timeStr) return '--:--:--'
   try {
-    const res = await fetch(`${API_BASE}/geo/ip?ip=${ip}`)
-    const json = await res.json()
-    if (json.code === 200) {
-      geoCache.set(ip, json.data)
-      return json.data
-    }
-  } catch (e) { console.error('geo查询失败:', e) }
-  return null
+    const d = new Date(timeStr)
+    return d.toLocaleTimeString('zh-CN', { hour12: false })
+  } catch (e) {
+    return timeStr
+  }
 }
 
-function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7) }
-function nowTime() { return new Date().toLocaleString() }
+// --------------------- 坐标映射逻辑 ---------------------
+const geoMap = {
+  '加拿大': [-106.3468, 56.1304],
+  '美国': [-95.7129, 37.0902],
+  '中国': [104.1954, 35.8617],
+  '浙江': [120.15, 30.28],
+  '北京': [116.40, 39.90],
+  '上海': [121.47, 31.23],
+  '广东': [113.26, 23.12],
+  '俄罗斯': [105.31, 61.52],
+  '德国': [10.45, 51.16],
+  '英国': [-3.43, 55.37],
+  '法国': [2.21, 46.22],
+  '巴西': [-51.92, -14.23],
+  '印度': [78.96, 20.59],
+  '澳大利亚': [133.77, -25.27],
+}
 
-// --------------------- 地图初始化 ---------------------
-async function initChart() {
+const locationToCoord = (loc) => {
+  if (!loc) return [0, 0]
+  for (const k in geoMap) {
+    if (loc.includes(k)) return geoMap[k]
+  }
+  return [116.4074, 39.9042] // 默认北京
+}
+
+// --------------------- ECharts 初始化 ---------------------
+let chart = null
+
+const initChart = async () => {
   const el = document.getElementById('worldMap')
   if (!el) return
-  const res = await fetch('/maps/world.json')
-  const worldJson = await res.json()
-  echarts.registerMap('world', worldJson)
+
+  try {
+    const response = await fetch('/maps/world.json')
+    const worldJson = await response.json()
+    echarts.registerMap('world', worldJson)
+  } catch (error) {
+    console.error('Error loading world map:', error)
+    return
+  }
+
   chart = echarts.init(el)
+
   chart.setOption({
-    backgroundColor: '#f5f7fa00',
+    backgroundColor: '#12121a',
     geo: {
       map: 'world',
-      roam: false,
-      silent: true,
+      roam: true,
+      silent: false,
       label: { show: false },
-      itemStyle: { areaColor: '#f2f7ff', borderColor: '#e6eefc' },
-    },
-    tooltip: {
-      trigger: 'item',
-      formatter: p => {
-        if (p.seriesType === 'effectScatter')
-          return `${p.data.location || p.name}<br/>攻击次数: ${p.data.value[2]}`
-        return ''
+      itemStyle: {
+        areaColor: '#2a2a3d',
+        borderColor: '#444'
+      },
+      emphasis: {
+        label: {
+          show: true,
+          color: '#ffffff',
+          fontSize: 12
+        },
+        itemStyle: {
+          areaColor: '#ff9f42',
+          borderColor: '#ff9f42'
+        }
       }
     },
+    tooltip: { show: false },
     series: [
       {
         name: 'attack-lines',
         type: 'lines',
         coordinateSystem: 'geo',
+        z: 2,
         effect: { show: true, period: 4, symbol: 'arrow', symbolSize: 6, color: '#ff5b5b' },
         lineStyle: { color: '#ff9f9f', width: 1, opacity: 0.6, curveness: 0.3 },
         data: []
@@ -109,185 +184,281 @@ async function initChart() {
         name: 'attack-points',
         type: 'effectScatter',
         coordinateSystem: 'geo',
+        z: 3,
         rippleEffect: { brushType: 'stroke' },
-        symbolSize: val => 6 + Math.min(val[2] || 1, 10),
+        symbolSize: 6,
         label: { show: false },
+        itemStyle: { color: '#ff4d4f' },
         data: []
       }
     ]
   })
-}
 
-// --------------------- 刷新地图 ---------------------
-function refreshMap() {
-  if (!chart) return
-  const scatterData = []
-  const linesData = []
-  const targetCoord = [116.4074, 39.9042] // 默认目标点: 北京
-  const countryCount = {}
+  // --------------------- 鼠标事件监听 (核心修改点) ---------------------
+  chart.on('mousemove', params => {
+    const offsetX = params.event.offsetX + 20
+    const offsetY = params.event.offsetY + 20
+    const style = { left: offsetX + 'px', top: offsetY + 'px' }
 
-  for (const a of attacks) {
-    if (!a.latitude || !a.longitude) continue
-    const fromCoord = [a.longitude, a.latitude]
-    scatterData.push({
-      name: a.ip,
-      value: [...fromCoord, a.count || 1],
-      ip: a.ip,
-      location: a.location
-    })
-    linesData.push({ coords: [fromCoord, targetCoord], value: a.count })
-    const country = a.country || '未知'
-    countryCount[country] = (countryCount[country] || 0) + (a.count || 1)
-  }
+    // 1. 悬停在国家地图区域
+    if (params.componentType === 'geo') {
+      const countryName = params.name // 获取地图上的国家名(例如 "China")
+      
+      // 获取总数
+      const count = regionStats.value[countryName] || 0
+      
+      // 获取该国最新攻击时间
+      let rawTime = countryLastTimeMap.value[countryName]
+      
+      // 如果没有记录到时间，但有攻击数，说明攻击发生在列表之外，暂显示"近期"或留空
+      const displayTime = rawTime ? formatTime(rawTime) : (count > 0 ? '近期' : '无记录')
 
-  chart.setOption({
-    series: [
-      { name: 'attack-lines', data: linesData },
-      { name: 'attack-points', data: scatterData }
-    ],
-    geo: {
-      regions: Object.keys(countryCount).map(name => ({ name, attackCount: countryCount[name] }))
-    }
-  })
-}
-
-// --------------------- HTTP 轮询（使用 /dashboard/all 聚合接口） ---------------------
-let pollTimer = null
-async function fetchDashboardAll() {
-  try {
-    const res = await fetch(`${API_BASE}/dashboard/all?timeRange=24h`)
-    const json = await res.json()
-    if (json.code !== 200 || !json.data) return
-
-    const data = json.data
-    // 尝试从聚合数据中填充 stats（会尝试多种字段以兼容不同后端返回）
-    if (data.kpi) {
-      // 假设 kpi 中存在 requests/blocks/uniqueIps 等字段
-      stats.visitors = data.kpi.uniqueIps?.today ?? stats.visitors
-      stats.requests = data.kpi.requests?.today ?? stats.requests
-      stats.blocked = data.kpi.blocks?.today ?? stats.blocked
-    }
-
-    // 如果存在 overview 类型聚合
-    if (data.overview) {
-      stats.requests = data.overview.total ?? stats.requests
-      stats.blocked = data.overview.blocked ?? stats.blocked
-      stats.visitors = data.overview.uniqueIps ?? stats.visitors
-    }
-
-    // 清空并重建 attacks 列表：优先使用 geo.mapData 或 charts.topIps/topAttacks
-    attacks.length = 0
-    const pushPoint = (lat, lng, count = 1, ip = '', location = '', country = '') => {
-      if (lat == null || lng == null) return
-      attacks.push({ id: uid(), ip, location, latitude: lat, longitude: lng, country: country || location.split(' ')[0] || '', count, time: nowTime() })
-    }
-
-    if (data.geo && Array.isArray(data.geo.mapData)) {
-      for (const item of data.geo.mapData) {
-        const lat = item.lat ?? item.latitude
-        const lng = item.lng ?? item.longitude
-        const count = item.count ?? item.value ?? 1
-        pushPoint(lat, lng, count, item.ip || '', item.city ? `${item.country || ''} ${item.city}`.trim() : item.country || '', item.country)
+      hoverInfo.value = {
+        type: 'country',
+        name: countryName,
+        count: count,
+        time: displayTime // 使用攻击时间
       }
+      tooltipStyle.value = style
+      return
     }
 
-    // charts.topIps / charts.topAttacks 可能包含 ip/location/count
-    if (data.charts) {
-      const tops = data.charts.topIps || data.charts.topAttacks || data.topIps || data.topAttacks
-      if (Array.isArray(tops)) {
-        for (const t of tops) {
-          if (t.latitude && t.longitude) pushPoint(t.latitude, t.longitude, t.count || t.value || 1, t.ip || '', t.location || t.city || '', t.country)
-          else if (t.ip) {
-            // 如果没有经纬度，尝试用 geo 接口补全（异步但不阻塞主渲染）
-            getGeo(t.ip).then(geo => {
-              if (!geo) return
-              pushPoint(geo.latitude, geo.longitude, t.count || 1, t.ip, `${geo.country || ''} ${geo.city || ''}`.trim(), geo.country)
-              refreshMap()
-            }).catch(() => {})
-          }
+    // 2. 悬停在攻击点(红点)
+    if (params.componentType === 'series' && params.data) {
+      const d = params.data
+      if (d.ip) {
+        hoverInfo.value = {
+          type: 'point',
+          ip: d.ip,
+          location: d.location,
+          time: formatTime(d.time) // 攻击点的具体时间
         }
+        tooltipStyle.value = style
+        return
       }
     }
 
-    // 如果没有任何点，尝试从 data.topIps（兼容）
-    if (attacks.length === 0 && Array.isArray(data.topIps)) {
-      for (const t of data.topIps) {
-        if (t.latitude && t.longitude) pushPoint(t.latitude, t.longitude, t.count || 1, t.ip || '', t.location || '', t.country)
-      }
-    }
+    hoverInfo.value = null
+  })
 
-    // 限制数量
-    if (attacks.length > 50) attacks.splice(50)
-    refreshMap()
-  } catch (e) {
-    console.error('fetchDashboardAll failed', e)
-  }
+  chart.on('globalout', () => { hoverInfo.value = null })
+  window.addEventListener('resize', () => chart && chart.resize())
 }
 
-function startPolling(interval = 5000) {
-  // 立即拉取一次
-  fetchDashboardAll()
-  if (pollTimer) clearInterval(pollTimer)
-  pollTimer = setInterval(fetchDashboardAll, interval)
+const handleListHover = (attack) => {
+    // 列表悬停交互（可选）
 }
 
-function stopPolling() {
-  if (pollTimer) {
-    clearInterval(pollTimer)
-    pollTimer = null
-  }
-}
+// --------------------- 数据获取逻辑 ---------------------
 
-// --------------------- 初始化 ---------------------
-onMounted(async () => {
-  await initChart()
-
-  // ✅ 初始化仪表盘国家数据（可选）
+// 1. 获取统计数据 (KPI)
+const fetchStats = async () => {
   try {
-    const res = await fetch(`${API_BASE}/dashboard/geo?timeRange=24h`)
-    const json = await res.json()
-    if (json.code === 200) {
-      const countries = json.data.countries
-      countries.forEach(c => {
-        attacks.push({
-          id: uid(),
-          ip: '',
-          location: c.name,
-          latitude: null,
-          longitude: null,
-          count: c.value,
-          country: c.name
-        })
-      })
-      refreshMap()
+    const [accessRes, wafRes] = await Promise.all([
+      trafficAPI.getAccessStats({ timeRange: '24h' }),
+      trafficAPI.getWafStats({ timeRange: '24h' })
+    ])
+    if (accessRes.data) {
+      const d = accessRes.data
+      stats.visitors = d.uv || d.visitors || 0
+      stats.requests = d.pv || d.requests || 0
     }
-  } catch (e) {
-    console.error('加载仪表板地理数据失败', e)
-  }
-  // 使用聚合接口轮询替代 WebSocket，避免 404
-  startPolling(5000)
+    if (wafRes.data) {
+       const d = wafRes.data
+       stats.blocked = d.intercept_count || d.blocked || 0
+    }
+  } catch (error) { console.warn(error) }
+}
+
+// 2. 获取地理位置总数 (用于国家总攻击数)
+const fetchGeoStats = async () => {
+  try {
+    const res = await trafficAPI.getGeoLocationData({ scope: 'world', type: 'intercept', timeRange: '24h' })
+    if (res.data && Array.isArray(res.data)) {
+      const map = {}
+      res.data.forEach(item => {
+        // item.name 必须匹配地图 JSON 的 name (通常是英文或中文)
+        map[item.name] = item.value
+      })
+      regionStats.value = map
+    }
+  } catch (error) { console.warn(error) }
+}
+
+// 3. 获取实时攻击列表 & 提取每个国家最新时间
+const fetchRealtimeAttacks = async () => {
+  if (!chart) return
+
+  try {
+    const res = await securityAPI.getRealTimeEvents({ limit: 50 }) // 获取最近50条
+    
+    if (res.data && Array.isArray(res.data)) {
+      const newAttacks = res.data.map(item => ({
+        id: item.id || Math.random().toString(36),
+        ip: item.source_ip || item.ip || 'Unknown',
+        location: item.geo_location || item.location || 'Unknown',
+        time: item.timestamp || item.time || new Date().toISOString(),
+        count: item.attack_count || item.count || 1
+      }))
+
+      // 更新列表
+      attacks.splice(0, attacks.length, ...newAttacks)
+
+      // 【核心逻辑】遍历实时数据，记录每个国家出现的最新时间
+      const tempTimeMap = { ...countryLastTimeMap.value } // 继承旧数据
+      
+      newAttacks.forEach(att => {
+        // 尝试提取国家名，假设 location 格式为 "China-Beijing" 或 "China"
+        // 这里的提取规则要和 trafficAPI 返回的 name 保持一致，最好是统一的
+        let country = att.location
+        if (att.location.includes('-')) {
+            country = att.location.split('-')[0]
+        }
+        
+        // 简单映射处理（如果接口返回中文，但地图用英文，需在此处转换，这里假设一致）
+        // 比较时间，保留较晚（较新）的时间
+        const currentStored = tempTimeMap[country]
+        if (!currentStored || new Date(att.time) > new Date(currentStored)) {
+          tempTimeMap[country] = att.time
+        }
+      })
+      countryLastTimeMap.value = tempTimeMap
+
+      // 绘制地图点线
+      const scatterData = []
+      const linesData = []
+      const targetCoord = [116.4074, 39.9042]
+
+      newAttacks.forEach(a => {
+        const fromCoord = locationToCoord(a.location)
+        if (fromCoord) {
+            // 给散点数据带上 time 属性
+            scatterData.push({ 
+                name: a.ip, 
+                value: [...fromCoord, a.count], 
+                ip: a.ip, 
+                location: a.location,
+                time: a.time // 传入时间供 tooltip 使用
+            })
+            linesData.push({ 
+                coords: [fromCoord, targetCoord], 
+                value: a.count 
+            })
+        }
+      })
+
+      chart.setOption({
+        series: [
+          { name: 'attack-lines', data: linesData },
+          { name: 'attack-points', data: scatterData }
+        ]
+      })
+    }
+  } catch (error) { console.warn(error) }
+}
+
+// --------------------- 生命周期 ---------------------
+let dataInterval = null
+
+onMounted(async () => {
+  updateClock()
+  clockTimer = setInterval(updateClock, 1000)
+
+  await initChart()
+  
+  await Promise.all([ fetchStats(), fetchGeoStats(), fetchRealtimeAttacks() ])
+
+  dataInterval = setInterval(() => {
+    fetchStats()
+    fetchGeoStats()
+    fetchRealtimeAttacks()
+  }, 10000)
 })
 
 onBeforeUnmount(() => {
-  stopPolling()
-  if (ws) ws.close()
-  if (heartbeatTimer) clearInterval(heartbeatTimer)
+  if (clockTimer) clearInterval(clockTimer)
+  if (dataInterval) clearInterval(dataInterval)
+  window.removeEventListener('resize', () => chart && chart.resize())
 })
 </script>
 
 <style scoped>
-  .waf-dashboard { padding: 16px; font-family: Arial, Helvetica, sans-serif; }
-  .header { display:flex; justify-content:space-between; align-items:center; margin-bottom:12px }
-  .stats { display:flex; gap:12px }
-  .card { background:#fff; border-radius:6px; padding:12px 16px; box-shadow:0 1px 3px rgba(0,0,0,0.06); min-width:140px }
-  .card .title { color:#666; font-size:12px }
-  .card .value { font-size:20px; font-weight:700; margin-top:6px }
-  .clock { color:#888 }
-  .content { display:flex; gap:12px }
-  .map { flex:1; height:560px; background:#f8f9fb; border-radius:6px }
-  .sidebar { width:320px; background:#fff; border-radius:6px; padding:12px; box-shadow:0 1px 3px rgba(0,0,0,0.06); overflow:auto }
-  .attack-list { list-style:none; padding:0; margin:0 }
-  .attack-item { padding:8px 0; border-bottom:1px solid #f0f3f8 }
-  .attack-title { font-weight:600 }
-  .attack-meta { color:#888; font-size:12px }
+/* 保持原有布局样式 */
+.dashboard-container { 
+  display: flex; 
+  height: calc(100vh - 80px); 
+  gap: 12px; 
+  padding: 18px; 
+  box-sizing: border-box; 
+  background: linear-gradient(180deg, #1e1e2f 0%, #12121a 100%);
+}
+.left-panel, .right-panel { width: 18%; display: flex; flex-direction: column; gap: 16px; }
+.map-panel { flex: 1; position: relative; background: #1f1f2e; border-radius: 12px; overflow: hidden; box-shadow: 0 6px 20px rgba(0, 0, 0, 0.6); }
+.map { width: 100%; height: 100%; }
+
+.stat-card { padding: 16px; background: #2a2a3d; border-radius: 8px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5); }
+.stat-title { color: #aaa; font-size: 14px; margin-bottom: 8px; }
+.stat-number { font-size: 28px; margin-top: 8px; color: #f0f0f0; font-weight: bold; }
+.stat-number.danger { color: #ff6b6b; }
+
+.attack-card { height: 100%; padding: 12px; background: #2a2a3d; border-radius: 8px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5); }
+.attack-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; border-bottom: 1px solid #444; padding-bottom: 8px; }
+.attack-header h3 { margin: 0; color: #f0f0f0; font-size: 16px; }
+.clock { font-size: 12px; color: #aaa; }
+.attack-scroll { height: calc(100% - 56px); overflow-y: auto; }
+.attack-list { list-style: none; padding: 0; margin: 0; }
+.attack-list li { display: flex; justify-content: space-between; padding: 10px 8px; border-bottom: 1px solid #444; cursor: default; }
+.attack-list li:hover { background-color: #33334d; }
+.attack-list li .left { display: flex; flex-direction: column; gap: 2px; }
+.rank { width: 20px; text-align: center; color: #fff; background: #6c8cff; padding: 2px 6px; border-radius: 12px; font-size: 12px; }
+.ip { font-weight: 600; color: #f0f0f0; font-size: 13px; }
+.loc { color: #aaa; font-size: 12px; }
+.time { color: #888; font-size: 11px; }
+.count { font-weight: 600; color: #ff6b6b; font-size: 12px; }
+.row1, .row2 { display: flex; justify-content: flex-start; gap: 20px; font-size: 12px; color: #aaa; }
+
+/* Tooltip 样式 */
+.tooltip {
+  position: absolute;
+  pointer-events: none;
+  background: rgba(20, 20, 35, 0.9); /* 深色背景 */
+  border: 1px solid #ffffff;           /* 白色边框 */
+  border-radius: 6px;
+  padding: 10px 12px;
+  min-width: 140px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.8);
+  z-index: 1000;
+  color: #ffffff; /* 确保文字全是白色 */
+}
+
+/* 强制内部元素白色 */
+.tooltip .tt-title { 
+  font-weight: bold; 
+  margin-bottom: 4px; 
+  color: #ffffff; 
+  font-size: 14px; 
+}
+.tooltip .tt-ip { 
+  font-size: 12px; 
+  color: #ffffff;
+}
+.tooltip .tt-row { 
+  display: flex; 
+  align-items: center; 
+  margin-bottom: 4px; 
+  font-size: 13px; 
+  color: #ffffff; 
+  white-space: nowrap; 
+}
+.tooltip .tt-row:last-child { margin-bottom: 0; }
+.tooltip .label { 
+  color: #cccccc; /* 标签可以是浅灰，区分内容 */
+  margin-right: 8px; 
+  font-weight: normal; 
+}
+
+.fade-enter-active, .fade-leave-active { transition: opacity 0.2s; }
+.fade-enter-from, .fade-leave-to { opacity: 0; }
+
+@media(max-width: 1100px) { .left-panel, .right-panel { display: none; } }
 </style>
