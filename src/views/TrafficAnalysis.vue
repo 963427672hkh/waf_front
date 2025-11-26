@@ -304,27 +304,27 @@ const kpiData = computed(() => {
       desktopTraffic: dashboardData.kpi.desktopTraffic ?? 0
     }
   }
-  
-  // 如果没有数据，使用模拟数据
+
+  // 如果没有数据，后端未返回时全部设为 0（移除页面内的模拟数据）
   return {
-    requests: 21700,
-    pageViews: 6500,
-    uniqueVisitors: 492,
-    uniqueIPs: 673,
-    intercepts: 12000,
-    attackIPs: 93,
-    error4xx: 3900,
-    error4xxRate: 17.72,
-    intercept4xx: 12000,
-    intercept4xxRate: 55.22,
-    error5xx: 236,
-    error5xxRate: 1.09,
-    avgResponseTime: 245,
-    bandwidth: 1250,
-    sslConnections: 1850,
-    countries: 45,
-    mobileTraffic: 3200,
-    desktopTraffic: 3300
+    requests: 0,
+    pageViews: 0,
+    uniqueVisitors: 0,
+    uniqueIPs: 0,
+    intercepts: 0,
+    attackIPs: 0,
+    error4xx: 0,
+    error4xxRate: 0,
+    intercept4xx: 0,
+    intercept4xxRate: 0,
+    error5xx: 0,
+    error5xxRate: 0,
+    avgResponseTime: 0,
+    bandwidth: 0,
+    sslConnections: 0,
+    countries: 0,
+    mobileTraffic: 0,
+    desktopTraffic: 0
   }
 })
 
@@ -346,30 +346,18 @@ const qpsData = ref({
   history: []
 })
 
-// 威胁数据
-const threatData = ref([
-  { level: 'high', levelName: '高危', ip: '192.168.1.100', type: 'SQL注入', time: '16:25:30' },
-  { level: 'medium', levelName: '中危', ip: '10.0.0.50', type: 'XSS攻击', time: '16:24:15' },
-  { level: 'low', levelName: '低危', ip: '172.16.0.25', type: '目录遍历', time: '16:23:45' },
-  { level: 'high', levelName: '高危', ip: '203.0.113.10', type: '命令注入', time: '16:22:30' },
-  { level: 'medium', levelName: '中危', ip: '198.51.100.5', type: '文件包含', time: '16:21:20' }
-])
+// 威胁数据 - 移除页面内模拟项，若后端未返回则显示为空
+const threatData = ref([])
 
-// 攻击类型数据
-const attackTypeData = ref([
-  { name: 'SQL注入', value: 35 },
-  { name: 'XSS攻击', value: 28 },
-  { name: '目录遍历', value: 20 },
-  { name: '命令注入', value: 12 },
-  { name: '文件包含', value: 5 }
-])
+// 攻击类型数据 - 页面内不再使用硬编码模拟数据
+const attackTypeData = ref([])
 
-// 性能数据
+// 性能数据 - 默认空数组（后端未返回则图表将显示为 0 或空）
 const performanceData = ref({
-  cpu: [65, 70, 68, 72, 75, 73, 70],
-  memory: [45, 48, 50, 52, 55, 53, 50],
-  disk: [30, 32, 35, 38, 40, 38, 35],
-  network: [80, 85, 82, 88, 90, 87, 85]
+  cpu: [],
+  memory: [],
+  disk: [],
+  network: []
 })
 
 // 地理位置视图状态
@@ -680,7 +668,7 @@ const fetchQPSData = async () => {
     
     if (apiData && (apiData.history || apiData.current !== undefined)) {
       // 处理历史数据
-      const history = apiData.history || []
+      const history = apiData.history || apiData.timeline || []
       
       // 如果后端返回的时间已经是格式化字符串（如 "16:11"），直接使用
       // 否则需要按区间分组
@@ -738,7 +726,60 @@ const fetchQPSData = async () => {
     await nextTick()
     initQPSChart()
   } catch (error) {
-    console.error('[QPS数据] 获取失败:', error)
+    // 详细错误信息
+    const errorDetails = {
+      message: error.message || '未知错误',
+      status: error.response?.status || '无状态码',
+      statusText: error.response?.statusText || '无状态文本',
+      data: error.response?.data || '无响应数据',
+      url: error.config?.url || '未知URL',
+      method: error.config?.method || '未知方法'
+    }
+    
+    console.error('[QPS数据] 获取失败:', errorDetails)
+    console.error('[QPS数据] 完整错误对象:', error)
+    
+    // 如果是500错误，尝试使用降级方案：从日志统计接口获取数据
+    if (error.response?.status === 500) {
+      console.warn('[QPS数据] 后端接口返回500错误，尝试使用降级方案...')
+      try {
+        // 尝试使用日志统计接口作为降级方案
+        const fallbackResponse = await trafficAPI.getLogsStats({ timeRange: '1h' })
+        if (fallbackResponse?.data) {
+          const fallbackData = fallbackResponse.data.data || fallbackResponse.data
+          if (fallbackData && Array.isArray(fallbackData)) {
+            // 从日志统计数据中提取QPS信息
+            const now = new Date()
+            const thirtyMinutesAgo = new Date(now.getTime() - 30 * 60 * 1000)
+            
+            const qpsHistory = fallbackData
+              .filter(item => {
+                if (!item.timestamp && !item.time) return false
+                const itemTime = item.timestamp ? new Date(item.timestamp) : parseTimeString(item.time)
+                return itemTime && itemTime >= thirtyMinutesAgo
+              })
+              .map(item => ({
+                time: item.time || formatTime(new Date(item.timestamp)),
+                value: Number(item.qps || item.count || 0)
+              }))
+            
+            qpsData.value = {
+              current: qpsHistory.length > 0 ? qpsHistory[qpsHistory.length - 1].value : 0,
+              history: groupDataByInterval(qpsHistory, 5)
+            }
+            
+            console.log('[QPS数据] 降级方案成功，使用日志统计数据')
+            await nextTick()
+            initQPSChart()
+            return
+          }
+        }
+      } catch (fallbackError) {
+        console.error('[QPS数据] 降级方案也失败:', fallbackError)
+      }
+    }
+    
+    // 如果所有方案都失败，使用空数据
     qpsData.value = { current: 0, history: [] }
     await nextTick()
     initQPSChart()

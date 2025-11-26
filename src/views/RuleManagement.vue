@@ -168,7 +168,7 @@
             </td>
             <td>
               <span :class="`action-badge action-${rule.action.toLowerCase()}`">
-                {{ formatAction(rule.action) }}
+                {{ formatAction(rule.active) }}
               </span>
             </td>
             <td>{{ rule.score || '-' }}</td>
@@ -188,7 +188,7 @@
                 class="status-badge" 
                 :class="rule.isActive ? 'status-active' : 'status-inactive'"
               >
-                {{ rule.isActive ? '已启用' : '已禁用' }}
+                {{ rule.is_active ? '已启用' : '已禁用' }}
               </span>
             </td>
             <td class="actions-cell">
@@ -448,6 +448,7 @@ const loadRules = async () => {
     if (response.data?.code === 200) {
       const data = response.data.data || {}
       rules.value = data.items || []
+      console.log('rules',rules.value)
       totalCount.value = data.total || 0
     } else {
       // 使用模拟数据

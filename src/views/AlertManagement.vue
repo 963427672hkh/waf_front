@@ -440,7 +440,7 @@ const loadAllAlertsForStats = async () => {
 
 const loadAlertStats = async () => {
   try {
-    const response = await alertAPI.getAlertStats()
+    const response = await alertAPI.getAlerts()
     if (response.data?.code === 200) {
       const data = response.data.data || {}
       Object.assign(stats, {

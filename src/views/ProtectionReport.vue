@@ -340,7 +340,7 @@
 </template>
 
 <script setup>
-import wafReportService from '@api/report.js';
+import wafReportService from '@/api/report.js';
 import { computed, onMounted, reactive, ref } from 'vue';
 
 // 响应式数据

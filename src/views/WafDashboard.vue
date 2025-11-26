@@ -1,10 +1,37 @@
+<template>
+  <div class="waf-dashboard">
+    <div class="header">
+      <div class="stats">
+        <div class="card" v-for="card in statCards" :key="card.key">
+          <div class="title">{{ card.title }}</div>
+          <div class="value">{{ stats[card.key] }}</div>
+        </div>
+      </div>
+      <div class="clock">{{ currentTime }}</div>
+    </div>
+
+    <div class="content">
+      <div id="worldMap" class="map" />
+      <aside class="sidebar">
+        <h3>最近攻击</h3>
+        <ul class="attack-list">
+          <li v-for="a in attacks" :key="a.id" class="attack-item">
+            <div class="attack-title">{{ a.ip || a.location }}</div>
+            <div class="attack-meta">次数: {{ a.count }} · {{ a.time }}</div>
+          </li>
+        </ul>
+      </aside>
+    </div>
+  </div>
+</template>
+
 <script setup>
 import { ref, reactive, onMounted, onBeforeUnmount } from 'vue'
 import * as echarts from 'echarts'
 
 // --------------------- 全局配置 ---------------------
-const API_BASE = 'http://localhost:3000' // ✅ 后端接口地址
-const WS_URL = 'ws://localhost:3000/ws'  // ✅ 后端 WebSocket 地址
+const API_BASE = 'http://47.109.154.103:3000' // ✅ 后端接口地址
+const WS_URL = 'ws://47.109.154.103:3000/ws'  // ✅ 后端 WebSocket 地址
 
 const stats = reactive({ visitors: 0, requests: 0, blocked: 0 })
 const attacks = reactive([])
@@ -124,46 +151,90 @@ function refreshMap() {
   })
 }
 
-// --------------------- WebSocket ---------------------
-function connectWebSocket() {
-  ws = new WebSocket(WS_URL)
-  ws.onopen = () => {
-    console.log('[WS] Connected')
-    heartbeatTimer = setInterval(() => ws?.send('ping'), 20000)
-  }
-  ws.onmessage = async evt => {
-    const data = JSON.parse(evt.data)
-    if (data.type === 'stats') {
-      stats.visitors = data.visitors ?? stats.visitors
-      stats.requests = data.requests ?? stats.requests
-      stats.blocked = data.blocked ?? stats.blocked
+// --------------------- HTTP 轮询（使用 /dashboard/all 聚合接口） ---------------------
+let pollTimer = null
+async function fetchDashboardAll() {
+  try {
+    const res = await fetch(`${API_BASE}/dashboard/all?timeRange=24h`)
+    const json = await res.json()
+    if (json.code !== 200 || !json.data) return
+
+    const data = json.data
+    // 尝试从聚合数据中填充 stats（会尝试多种字段以兼容不同后端返回）
+    if (data.kpi) {
+      // 假设 kpi 中存在 requests/blocks/uniqueIps 等字段
+      stats.visitors = data.kpi.uniqueIps?.today ?? stats.visitors
+      stats.requests = data.kpi.requests?.today ?? stats.requests
+      stats.blocked = data.kpi.blocks?.today ?? stats.blocked
     }
-    if (data.type === 'attack') {
-      const geo = await getGeo(data.ip)
-      if (!geo) return
-      const item = {
-        id: uid(),
-        ip: data.ip,
-        location: `${geo.country || '未知'} ${geo.city || ''}`,
-        latitude: geo.latitude,
-        longitude: geo.longitude,
-        country: geo.country,
-        count: data.count || 1,
-        time: data.time || nowTime()
+
+    // 如果存在 overview 类型聚合
+    if (data.overview) {
+      stats.requests = data.overview.total ?? stats.requests
+      stats.blocked = data.overview.blocked ?? stats.blocked
+      stats.visitors = data.overview.uniqueIps ?? stats.visitors
+    }
+
+    // 清空并重建 attacks 列表：优先使用 geo.mapData 或 charts.topIps/topAttacks
+    attacks.length = 0
+    const pushPoint = (lat, lng, count = 1, ip = '', location = '', country = '') => {
+      if (lat == null || lng == null) return
+      attacks.push({ id: uid(), ip, location, latitude: lat, longitude: lng, country: country || location.split(' ')[0] || '', count, time: nowTime() })
+    }
+
+    if (data.geo && Array.isArray(data.geo.mapData)) {
+      for (const item of data.geo.mapData) {
+        const lat = item.lat ?? item.latitude
+        const lng = item.lng ?? item.longitude
+        const count = item.count ?? item.value ?? 1
+        pushPoint(lat, lng, count, item.ip || '', item.city ? `${item.country || ''} ${item.city}`.trim() : item.country || '', item.country)
       }
-      attacks.unshift(item)
-      if (attacks.length > 50) attacks.pop()
-      refreshMap()
     }
+
+    // charts.topIps / charts.topAttacks 可能包含 ip/location/count
+    if (data.charts) {
+      const tops = data.charts.topIps || data.charts.topAttacks || data.topIps || data.topAttacks
+      if (Array.isArray(tops)) {
+        for (const t of tops) {
+          if (t.latitude && t.longitude) pushPoint(t.latitude, t.longitude, t.count || t.value || 1, t.ip || '', t.location || t.city || '', t.country)
+          else if (t.ip) {
+            // 如果没有经纬度，尝试用 geo 接口补全（异步但不阻塞主渲染）
+            getGeo(t.ip).then(geo => {
+              if (!geo) return
+              pushPoint(geo.latitude, geo.longitude, t.count || 1, t.ip, `${geo.country || ''} ${geo.city || ''}`.trim(), geo.country)
+              refreshMap()
+            }).catch(() => {})
+          }
+        }
+      }
+    }
+
+    // 如果没有任何点，尝试从 data.topIps（兼容）
+    if (attacks.length === 0 && Array.isArray(data.topIps)) {
+      for (const t of data.topIps) {
+        if (t.latitude && t.longitude) pushPoint(t.latitude, t.longitude, t.count || 1, t.ip || '', t.location || '', t.country)
+      }
+    }
+
+    // 限制数量
+    if (attacks.length > 50) attacks.splice(50)
+    refreshMap()
+  } catch (e) {
+    console.error('fetchDashboardAll failed', e)
   }
-  ws.onclose = () => {
-    console.warn('[WS] Closed, reconnecting...')
-    clearInterval(heartbeatTimer)
-    setTimeout(connectWebSocket, 5000)
-  }
-  ws.onerror = err => {
-    console.error('[WS] Error:', err)
-    ws.close()
+}
+
+function startPolling(interval = 5000) {
+  // 立即拉取一次
+  fetchDashboardAll()
+  if (pollTimer) clearInterval(pollTimer)
+  pollTimer = setInterval(fetchDashboardAll, interval)
+}
+
+function stopPolling() {
+  if (pollTimer) {
+    clearInterval(pollTimer)
+    pollTimer = null
   }
 }
 
@@ -193,12 +264,30 @@ onMounted(async () => {
   } catch (e) {
     console.error('加载仪表板地理数据失败', e)
   }
-
-  connectWebSocket()
+  // 使用聚合接口轮询替代 WebSocket，避免 404
+  startPolling(5000)
 })
 
 onBeforeUnmount(() => {
+  stopPolling()
   if (ws) ws.close()
-  clearInterval(heartbeatTimer)
+  if (heartbeatTimer) clearInterval(heartbeatTimer)
 })
 </script>
+
+<style scoped>
+  .waf-dashboard { padding: 16px; font-family: Arial, Helvetica, sans-serif; }
+  .header { display:flex; justify-content:space-between; align-items:center; margin-bottom:12px }
+  .stats { display:flex; gap:12px }
+  .card { background:#fff; border-radius:6px; padding:12px 16px; box-shadow:0 1px 3px rgba(0,0,0,0.06); min-width:140px }
+  .card .title { color:#666; font-size:12px }
+  .card .value { font-size:20px; font-weight:700; margin-top:6px }
+  .clock { color:#888 }
+  .content { display:flex; gap:12px }
+  .map { flex:1; height:560px; background:#f8f9fb; border-radius:6px }
+  .sidebar { width:320px; background:#fff; border-radius:6px; padding:12px; box-shadow:0 1px 3px rgba(0,0,0,0.06); overflow:auto }
+  .attack-list { list-style:none; padding:0; margin:0 }
+  .attack-item { padding:8px 0; border-bottom:1px solid #f0f3f8 }
+  .attack-title { font-weight:600 }
+  .attack-meta { color:#888; font-size:12px }
+</style>
