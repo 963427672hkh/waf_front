@@ -1,6 +1,6 @@
 // 仪表板数据管理组合式函数
 import { ref, reactive } from 'vue'
-import { dashboardAPI } from '../api'
+import { trafficAPI } from '../api'
 
 // 全局状态，确保所有组件共享同一个数据源
 const loading = ref(false)
@@ -21,6 +21,8 @@ const data = reactive({
 
 // // 是否使用模拟数据 - 全局共享
 // const useMockData = ref(true)
+
+//没有被调用过loadAllData方法
 
 // 加载所有数据 - 全局函数，所有组件共享
 const loadAllData = async () => {
@@ -47,14 +49,14 @@ const loadAllData = async () => {
     try {
       // 并行调用多个接口，有的可能失败或返回空数据
       const [accessStats, wafStats, topPaths, topIPs] = await Promise.allSettled([
-        dashboardAPI.getAccessStats(),
-        dashboardAPI.getWafStats(),
-        dashboardAPI.getTopPaths({ limit: 10 }),
-        dashboardAPI.getTopIPs({ limit: 10 })
+        trafficAPI.getAccessStats(),
+        trafficAPI.getWafStats(),
+        trafficAPI.getTopPaths({ limit: 10 }),
+        trafficAPI.getTopIPs({ limit: 10 })
       ])
       
       // 访问日志统计
-      if (accessStats.status === 'fulfilled') {
+      if (accessStats.code === 200) {
         // 尝试不同的数据结构
         let accessData = null
         if (accessStats.value?.data) {

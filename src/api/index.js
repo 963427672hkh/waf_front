@@ -136,7 +136,8 @@ export const trafficAPI = {
   }
 }
 
-// 兼容性：保留原有的dashboardAPI
-export const dashboardAPI = trafficAPI
+// // 兼容性：保留原有的dashboardAPI
+// export const dashboardAPI = trafficAPI
+
 
 export default api

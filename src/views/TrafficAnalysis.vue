@@ -170,7 +170,7 @@
       </div>
       <div class="kpi-card">
         <div class="kpi-icon">📊</div>
-        <div class="kpi-value">{{ formatNumber(kpiData.bandwidth) }}MB</div>
+        <div class="kpi-value">{{ formatNumber(kpiData.bandwidth) }}{{ kpiData.bandwidthUnit }}</div>
         <div class="kpi-label">带宽使用</div>
         <div class="kpi-trend trend-up">▲</div>
       </div>
@@ -269,6 +269,40 @@ echarts.use([
 let worldMapDataCache = null
 let chinaMapDataCache = null
 
+// 常见错误码参考 FRONTEND_API_GUIDE，集中处理 4xx/拦截逻辑
+const COMMON_4XX_CODES = new Set([400, 401, 403, 404, 409, 422])
+const INTERCEPT_STATUS_CODES = new Set([401, 403, 409, 422])
+
+// 根据状态分布计算符合条件的数量
+const sumStatusByPredicate = (distribution, predicate) => {
+  if (!Array.isArray(distribution)) return 0
+  return distribution.reduce((sum, item) => {
+    const status = Number(item?.status)
+    const count = Number(item?.count) || 0
+    if (Number.isNaN(status) || !predicate(status)) {
+      return sum
+    }
+    return sum + count
+  }, 0)
+}
+
+// 将字节数转换为可读单位
+const formatTrafficVolume = (bytes) => {
+  let value = Number(bytes) || 0
+  const units = ['B', 'KB', 'MB', 'GB', 'TB']
+  let idx = 0
+  while (value >= 1024 && idx < units.length - 1) {
+    value /= 1024
+    idx += 1
+  }
+  // 数值较大时没必要保留太多小数
+  const fixedValue = value >= 100 ? Math.round(value) : Number(value.toFixed(1))
+  return {
+    value: fixedValue,
+    unit: units[idx]
+  }
+}
+
 // 使用dashboard composable - 获取全局状态
 const { 
   data: dashboardData, 
@@ -298,6 +332,7 @@ const kpiData = computed(() => {
       error5xxRate: dashboardData.kpi.error5xxRate ?? 0,
       avgResponseTime: dashboardData.kpi.avgResponseTime ?? 0,
       bandwidth: dashboardData.kpi.bandwidth ?? 0,
+      bandwidthUnit: dashboardData.kpi.bandwidthUnit ?? 'MB',
       sslConnections: dashboardData.kpi.sslConnections ?? 0,
       countries: dashboardData.kpi.countries ?? 0,
       mobileTraffic: dashboardData.kpi.mobileTraffic ?? 0,
@@ -320,7 +355,8 @@ const kpiData = computed(() => {
     error5xx: 0,
     error5xxRate: 0,
     avgResponseTime: 0,
-    bandwidth: 0,
+      bandwidth: 0,
+      bandwidthUnit: 'MB',
     sslConnections: 0,
     countries: 0,
     mobileTraffic: 0,
@@ -1836,23 +1872,37 @@ const fetchKpiData = async () => {
     if (statsData) {
       // 从 statsData.data 中提取实际数据
       const actualData = statsData.data || statsData
+      const totalRequests = Number(actualData.totalRequests) || 0
+      const statusDistribution = Array.isArray(actualData.statusDistribution) ? actualData.statusDistribution : []
+      
+      // 依据 statusDistribution 计算 4xx/5xx 及拦截指标
+      const error4xx = sumStatusByPredicate(
+        statusDistribution,
+        (status) => (status >= 400 && status < 500) || COMMON_4XX_CODES.has(status)
+      )
+      const error5xx = sumStatusByPredicate(statusDistribution, (status) => status >= 500 && status < 600)
+      const intercept4xx = sumStatusByPredicate(statusDistribution, (status) => INTERCEPT_STATUS_CODES.has(status))
+      const safeRate = (value) => (totalRequests ? (value / totalRequests) * 100 : 0)
       
       // 更新全局状态中的KPI数据，映射字段
       dashboardData.kpi = {
-        requests: actualData.totalRequests ?? 0, // 总请求数
+        requests: totalRequests, // 总请求数
         pageViews: actualData.allowedRequests ?? 0, // 访问次数
         uniqueVisitors: actualData.uniqueIps ?? 0, // 独立访客(UV) - 使用独立IP
         uniqueIPs: actualData.uniqueIps ?? 0, // 独立IP
         intercepts: actualData.blockedRequests ?? 0, // 拦截次数
         attackIPs: actualData.attackIPs ?? 0, // 攻击IP
-        error4xx: actualData.error4xx ?? 0, // 4xx错误数
-        error4xxRate: actualData.error4xxRate ?? 0, // 4xx错误率
-        intercept4xx: actualData.intercept4xx ?? 0, // 4xx拦截数
-        intercept4xxRate: actualData.intercept4xxRate ?? 0, // 4xx拦截率
-        error5xx: actualData.error5xx ?? 0, // 5xx错误数
-        error5xxRate: actualData.error5xxRate ?? 0, // 5xx错误率
+        error4xx: actualData.status4xx ?? 0,
+        error4xxRate: safeRate(error4xx),
+        intercept4xx,
+        intercept4xxRate: safeRate(intercept4xx),
+        error5xx,
+        error5xxRate: safeRate(error5xx),
         avgResponseTime: Math.round((actualData.avgResponseTime || 0) * 1000), // 平均响应时间，从秒转为毫秒
-        bandwidth: Math.round((actualData.totalBytes || 0) / 1024 / 1024), // 宽带使用，从字节转为MB
+        ...(() => {
+          const { value, unit } = formatTrafficVolume(actualData.totalBytes)
+          return { bandwidth: value, bandwidthUnit: unit }
+        })(),
         sslConnections: actualData.sslConnections ?? 0, // SSL连接数
         countries: actualData.countries ?? 0, // 访问国家数
         mobileTraffic: actualData.mobileTraffic ?? 0, // 移动端流量
