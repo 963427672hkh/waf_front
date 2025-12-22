@@ -1,5 +1,5 @@
-// 仪表板数据管理组合式函数
-import { ref, reactive } from 'vue'
+// 仪表板数据管理组合式函数,确保状态一致，数据一致
+import { reactive, ref } from 'vue'
 import { dashboardAPI } from '../api'
 
 // 全局状态，确保所有组件共享同一个数据源
