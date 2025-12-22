@@ -2,8 +2,8 @@
 import { createRouter, createWebHistory } from 'vue-router'
 
 // 导入页面组件
-import LoginPage from '../views/LoginPage.vue'
 import Dashboard from '../views/Dashboard.vue'
+import LoginPage from '../views/LoginPage.vue'
 
 const routes = [
   {
@@ -34,13 +34,19 @@ router.beforeEach(async (to, from, next) => {
   // 检查本地存储中的token
   const accessToken = localStorage.getItem('waf_access_token')
   const isAuthenticated = !!accessToken
-  
+
+if (from.path === '/logout' && to.path === '/login') {
+    console.log('从退出页跳转到登录页，允许')
+    return next()
+  }
+
   // 检查是否需要认证
   if (to.meta.requiresAuth && !isAuthenticated) {
     next('/login')
   } else if (to.path === '/login' && isAuthenticated) {
     next('/')
-  } else {
+  } 
+  else {
     next()
   }
 })
