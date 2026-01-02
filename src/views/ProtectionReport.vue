@@ -3,356 +3,235 @@
     <!-- 控制栏 -->
     <div class="controls">
       <div class="controls-left">
-        <button class="refresh-btn" @click="loadStats" :disabled="loading">
-          <i class="fas fa-sync-alt" :class="{ 'fa-spin': loading }"></i> 
+        <el-button 
+          type="primary" 
+          :loading="loading" 
+          @click="loadStats"
+          :disabled="loading"
+          class="refresh-btn"
+          size="large" 
+        >
+          <template #icon>
+            <el-icon><Refresh /></el-icon>
+          </template>
           {{ loading ? '加载中...' : '刷新统计信息' }}
-        </button>
-        <div class="status">{{ status }}</div>
+        </el-button>
+        
+        <div class="status">
+          <span v-if="loading">正在加载统计数据...</span>
+          <span v-else-if="statsData">
+            {{ searchQuery ? `找到 ${filteredExports.length} 条报告` : `共 ${statsData.totalLogs || 0} 条报告` }}
+          </span>
+          <span v-else>未加载</span>
+        </div>
       </div>
       
       <div class="top-bar-right">
-        <div class="input-group">
-          <input 
-            type="text" 
-            v-model="searchQuery" 
-            placeholder=" " 
-            required
+        <div class="search-container">
+          <el-input
+            v-model="searchQuery"
+            placeholder="搜索报告名称"
+            clearable
             @input="handleSearch"
+            @keyup.enter="performSearch"
             @focus="showSearchResults = true"
             @blur="onSearchBlur"
+            class="search-input"
+            size="large"
           >
-          <label>报告名称</label>
-          <div class="match-results" v-show="showSearchResults && filteredExports.length > 0">
-            <div 
-              v-for="exportItem in filteredExports" 
-              :key="exportItem.taskId"
-              class="match-item"
-              @click="selectExport(exportItem.filename)"
-            >
-              {{ exportItem.filename }}
-            </div>
-          </div>
+            <template #prefix>
+              <el-icon><Search /></el-icon>
+            </template>
+            <template #append>
+              <el-button @click="performSearch" :icon="Search" />
+            </template>
+          </el-input>
+          
         </div>
-        <button class="login-get" @click="openGenerateModal" :disabled="generating">
-          <i class="fas fa-plus" :class="{ 'fa-spin': generating }"></i> 
+        
+        <el-button 
+          type="success" 
+          @click="openGenerateModal" 
+          :loading="generating"
+          class="generate-btn"
+          size="large"
+        >
+          <template #icon>
+            <el-icon><Plus /></el-icon>
+          </template>
           {{ generating ? '生成中...' : '立即生成' }}
-        </button>
-      </div>
-    </div>
-    
-    <!-- 统计信息区域 -->
-    <div class="stats-container" v-if="statsData">
-      <div class="stats-header">
-        <h3>WAF 日志统计概览</h3>
-        <div class="last-updated">最后更新: {{ formatDate(statsTimestamp) }}</div>
-      </div>
-      
-      <div class="stats-grid">
-        <div class="stat-card">
-          <div class="stat-icon total">
-            <i class="fas fa-file-alt"></i>
-          </div>
-          <div class="stat-info">
-            <div class="stat-value">{{ statsData.totalLogs || 0 }}</div>
-            <div class="stat-label">总日志数</div>
-          </div>
-        </div>
-        
-        <div class="stat-card">
-          <div class="stat-icon blocked">
-            <i class="fas fa-shield-alt"></i>
-          </div>
-          <div class="stat-info">
-            <div class="stat-value">{{ statsData.blockedLogs || 0 }}</div>
-            <div class="stat-label">拦截日志</div>
-          </div>
-        </div>
-        
-        <div class="stat-card">
-          <div class="stat-icon allowed">
-            <i class="fas fa-check-circle"></i>
-          </div>
-          <div class="stat-info">
-            <div class="stat-value">{{ statsData.allowedLogs || 0 }}</div>
-            <div class="stat-label">允许日志</div>
-          </div>
-        </div>
-        
-        <div class="stat-card">
-          <div class="stat-icon bypass">
-            <i class="fas fa-forward"></i>
-          </div>
-          <div class="stat-info">
-            <div class="stat-value">{{ statsData.bypassLogs || 0 }}</div>
-            <div class="stat-label">绕过日志</div>
-          </div>
-        </div>
-        
-        <div class="stat-card">
-          <div class="stat-icon unique">
-            <i class="fas fa-network-wired"></i>
-          </div>
-          <div class="stat-info">
-            <div class="stat-value">{{ statsData.uniqueIps || 0 }}</div>
-            <div class="stat-label">独立IP数</div>
-          </div>
-        </div>
-      </div>
-      
-      <!-- 详细统计信息 -->
-      <div class="detailed-stats">
-        <div class="stat-section">
-          <h4>攻击类型分布</h4>
-          <div class="stat-list">
-            <div 
-              v-for="attack in statsData.topAttacks" 
-              :key="attack.type"
-              class="stat-item"
-            >
-              <span class="stat-name">{{ attack.type.toUpperCase() }}</span>
-              <span class="stat-count">{{ attack.count }}</span>
-              <div class="stat-bar">
-                <div 
-                  class="stat-bar-fill" 
-                  :style="{ width: attack.percentage + '%' }"
-                ></div>
-              </div>
-              <span class="stat-percentage">{{ attack.percentage }}%</span>
-            </div>
-          </div>
-        </div>
-        
-        <div class="stat-section">
-          <h4>规则触发排行</h4>
-          <div class="stat-list">
-            <div 
-              v-for="rule in statsData.topRules" 
-              :key="rule.ruleId"
-              class="stat-item"
-            >
-              <span class="stat-name">规则 {{ rule.ruleId }}</span>
-              <span class="stat-count">{{ rule.count }}</span>
-              <div class="stat-bar">
-                <div 
-                  class="stat-bar-fill" 
-                  :style="{ width: rule.percentage + '%' }"
-                ></div>
-              </div>
-              <span class="stat-percentage">{{ rule.percentage }}%</span>
-            </div>
-          </div>
-        </div>
-        
-        <div class="stat-section">
-          <h4>来源IP排行</h4>
-          <div class="stat-list">
-            <div 
-              v-for="ip in statsData.topIps" 
-              :key="ip.ip"
-              class="stat-item"
-            >
-              <span class="stat-name">{{ ip.ip }}</span>
-              <span class="stat-count">{{ ip.count }} (拦截: {{ ip.blockedCount }})</span>
-              <div class="stat-bar">
-                <div 
-                  class="stat-bar-fill" 
-                  :style="{ width: (ip.count / statsData.totalLogs * 100) + '%' }"
-                ></div>
-              </div>
-            </div>
-          </div>
-        </div>
+        </el-button>
       </div>
     </div>
     
     <!-- 导出历史区域 -->
-    <div class="content">
+ 
+    <el-card class="content-card">
       <!-- 表头 -->
-      <div class="tlayar">
-        <div>报告名称</div>
-        <div>生成时间</div>
-        <div>操作</div>
+      <div class="table-header">
+        <el-row :gutter="20" class="header-row">
+          <el-col :span="10">报告名称</el-col>
+          <el-col :span="8">生成时间</el-col>
+          <el-col :span="6">操作</el-col>
+        </el-row>
       </div>
       
       <!-- 导出历史列表 -->
       <div class="reports-container">
-        <div v-if="exportHistory.length === 0 && !loading" class="empty-state">
-          <i class="fas fa-file-export"></i>
-          <h3>暂无导出记录</h3>
+        <el-empty 
+          v-if="displayExports.length === 0 && !loading" 
+          description="暂无导出记录"
+          class="empty-state"
+        >
+          <template #image>
+            <el-icon :size="60"><Document /></el-icon>
+          </template>
           <p>点击"立即生成"按钮创建新的WAF日志报告</p>
-        </div>
+        </el-empty>
         
         <div v-else>
-          <div 
-            v-for="exportItem in exportHistory" 
+          <el-row 
+            v-for="exportItem in displayExports"
             :key="exportItem.taskId"
-            class="thirdlayar"
+            :gutter="20"
+            class="report-row"
           >
-            <div class="report-title">{{ exportItem.filename }}</div>
-            <div class="report-time">{{ formatDate(exportItem.createTime) }}</div>
-            <div class="button-group">
-              <button class="btn download" @click="downloadExport(exportItem.taskId, exportItem.filename)">
-                <i class="fas fa-download"></i> 下载
-              </button>
-              <button class="btn delete" @click="deleteExport(exportItem.taskId)">
-                <i class="fas fa-trash"></i> 删除
-              </button>
-            </div>
-          </div>
+            <el-col :span="10" class="report-title">{{ exportItem.filename }}</el-col>
+            <el-col :span="8" class="report-time">{{ formatDate(exportItem.createTime) }}</el-col>
+            <el-col :span="6" class="button-group">
+              <el-button 
+                type="primary" 
+                size="small" 
+                @click="downloadExport(exportItem.taskId, exportItem.filename)"
+                class="download-btn"
+              >
+                <template #icon>
+                  <el-icon><Download /></el-icon>
+                </template>
+                下载
+              </el-button>
+              <el-button 
+                type="warning" 
+                size="small" 
+                @click="previewExport(exportItem.taskId)"
+                class="preview-btn"
+              >
+                <template #icon>
+                  <el-icon><View /></el-icon>
+                </template>
+                预览
+              </el-button>
+            </el-col>
+          </el-row>
         </div>
       </div>
-    </div>
+    </el-card>
     
     <!-- 生成报告弹窗 -->
-    <div class="modal" v-show="showModal" @click="closeModalOnBackdrop">
-      <div class="modal-content" @click.stop>
-        <div class="modal-header">
-          <h3 class="modal-title">生成WAF日志报告</h3>
-          <button class="close-btn" @click="closeGenerateModal">&times;</button>
-        </div>
-        <form @submit.prevent="handleGenerate">
-          <div class="form-group">
-            <label for="newReportName">报告名称</label>
-            <input 
-              type="text" 
-              id="newReportName" 
-              v-model="newReport.name"
-              class="form-control" 
-              placeholder="请输入报告名称" 
-              required
-              :disabled="generating"
-            >
-          </div>
-          
-          <div class="date-group">
-            <div class="form-group">
-              <label for="startDate">开始时间</label>
-              <input 
-                type="datetime-local" 
-                id="startDate" 
+    <el-dialog
+      v-model="showModal"
+      title="生成WAF日志报告"
+      width="600px"
+      :before-close="handleDialogClose"
+      class="generate-dialog"
+    >
+      <el-form
+        ref="formRef"
+        :model="newReport"
+        label-width="100px"
+        :disabled="generating"
+      >
+        <el-form-item label="报告名称" prop="name" required>
+          <el-input
+            v-model="newReport.name"
+            placeholder="请输入报告名称"
+            clearable
+          />
+        </el-form-item>
+        
+        <el-row :gutter="20">
+          <el-col :span="12">
+            <el-form-item label="开始时间" prop="startTime" required>
+              <el-date-picker
                 v-model="newReport.startTime"
-                class="form-control" 
-                required
-                :disabled="generating"
-              >
-            </div>
-            <div class="form-group">
-              <label for="endDate">结束时间</label>
-              <input 
-                type="datetime-local" 
-                id="endDate" 
+                type="datetime"
+                placeholder="选择开始时间"
+                format="YYYY-MM-DD HH:mm"
+                value-format="YYYY-MM-DDTHH:mm"
+                style="width: 100%"
+              />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="结束时间" prop="endTime" required>
+              <el-date-picker
                 v-model="newReport.endTime"
-                class="form-control" 
-                required
-                :disabled="generating"
-              >
-            </div>
-          </div>
-          
-          <div class="form-group">
-            <label for="clientIp">客户端IP</label>
-            <input 
-              type="text" 
-              id="clientIp" 
-              v-model="newReport.clientIp"
-              class="form-control" 
-              placeholder="可选: 过滤特定IP"
-              :disabled="generating"
-            >
-          </div>
-          
-          <div class="form-group">
-            <label for="action">操作类型</label>
-            <select 
-              id="action" 
-              v-model="newReport.action"
-              class="form-control" 
-              :disabled="generating"
-            >
-              <option value="">全部</option>
-              <option value="BLOCK">拦截</option>
-              <option value="ALLOW">允许</option>
-              <option value="BYPASS">绕过</option>
-            </select>
-          </div>
-          
-          <div class="form-group">
-            <label for="ruleId">规则ID</label>
-            <input 
-              type="number" 
-              id="ruleId" 
-              v-model="newReport.ruleId"
-              class="form-control" 
-              placeholder="可选: 特定规则ID"
-              :disabled="generating"
-            >
-          </div>
-          
-          <div class="form-group">
-            <label for="tags">标签</label>
-            <input 
-              type="text" 
-              id="tags" 
-              v-model="newReport.tags"
-              class="form-control" 
-              placeholder="可选: 多个标签用逗号分隔"
-              :disabled="generating"
-            >
-          </div>
-          
-          <div class="form-group">
-            <label for="search">关键词搜索</label>
-            <input 
-              type="text" 
-              id="search" 
-              v-model="newReport.search"
-              class="form-control" 
-              placeholder="可选: 日志内容搜索"
-              :disabled="generating"
-            >
-          </div>
-          
-          <div class="form-group">
-            <label for="format">导出格式</label>
-            <select 
-              id="format" 
-              v-model="newReport.format"
-              class="form-control" 
-              required
-              :disabled="generating"
-            >
-              <option value="pdf">PDF</option>
-              <option value="csv">CSV</option>
-            </select>
-          </div>
-          
-          <div class="modal-footer">
-            <button type="button" class="btn-cancel" @click="closeGenerateModal" :disabled="generating">取消</button>
-            <button type="submit" class="btn-submit" :disabled="generating">
-              <i class="fas fa-spinner fa-spin" v-if="generating"></i>
-              {{ generating ? '生成中...' : '生成报告' }}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+                type="datetime"
+                placeholder="选择结束时间"
+                format="YYYY-MM-DD HH:mm"
+                value-format="YYYY-MM-DDTHH:mm"
+                style="width: 100%"
+              />
+            </el-form-item>
+          </el-col>
+        </el-row>
+        
+        <el-form-item label="导出格式" prop="format" required>
+          <el-select
+            v-model="newReport.format"
+            placeholder="请选择导出格式"
+            style="width: 100%"
+          >
+            <el-option label="PDF" value="pdf" />
+            <el-option label="CSV" value="csv" />
+          </el-select>
+        </el-form-item>
+        
+        <el-divider />
+      </el-form>
+      
+      <template #footer>
+        <span class="dialog-footer">
+          <el-button @click="closeGenerateModal" :disabled="generating">
+            取消
+          </el-button>
+          <el-button
+            type="primary"
+            @click="handleGenerate"
+            :loading="generating"
+          >
+            生成报告
+          </el-button>
+        </span>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup>
-import wafReportService from '@/api/report.js';
+import wafReportService from '@api/report';
+import {
+  Document,
+  Download,
+  Plus,
+  Refresh,
+  Search,
+  View
+} from '@element-plus/icons-vue';
+import { ElButton, ElCol, ElDatePicker, ElDialog, ElDivider, ElForm, ElFormItem, ElInput, ElMessage, ElOption, ElRow, ElSelect } from 'element-plus';
+import 'element-plus/dist/index.css';
 import { computed, onMounted, reactive, ref } from 'vue';
 
 // 响应式数据
-const loading = ref(false);
-const generating = ref(false);
-const status = ref('就绪');
-const statsData = ref(null);
-const statsTimestamp = ref(null);
-const exportHistory = ref([]);
-const searchQuery = ref('');
-const showSearchResults = ref(false);
-const showModal = ref(false);
+const loading = ref(false)
+const generating = ref(false)
+const status = ref('就绪')
+const statsData = ref(null)
+const statsTimestamp = ref(null)
+const exportHistory = ref([])
+const searchQuery = ref('')
+const showSearchResults = ref(false)
+const showModal = ref(false)
 
 // 新报告表单数据
 const newReport = reactive({
@@ -360,181 +239,280 @@ const newReport = reactive({
   startTime: '',
   endTime: '',
   clientIp: '',
-  action: '',
+  action: 'BLOCK',
   ruleId: '',
   tags: '',
   search: '',
-  format: 'pdf'
-});
+  format: 'pdf',
+  minScore: 0,
+  maxScore: 100,
+  fields: ["time", "clientIp", "uri", "action", "ruleId"],
+})
 
-// 计算属性 - 过滤后的导出记录
+// 计算属性 - 过滤后的导出记录（用于下拉建议）
 const filteredExports = computed(() => {
-  if (!searchQuery.value.trim()) return [];
+  if (!searchQuery.value.trim()) return []
   
   return exportHistory.value.filter(item => 
     item.filename.toLowerCase().includes(searchQuery.value.toLowerCase())
-  );
-});
+  )
+})
+
+// 计算属性 - 显示在页面的报告列表
+const displayExports = computed(() => {
+  if (!searchQuery.value.trim()) {
+    return exportHistory.value // 没有搜索时显示全部
+  }
+  // 有搜索时，显示过滤后的列表
+  return exportHistory.value.filter(item => 
+    item.filename.toLowerCase().includes(searchQuery.value.toLowerCase())
+  )
+})
 
 // 格式化日期
 const formatDate = (dateString) => {
-  if (!dateString) return '';
+  if (!dateString) return ''
   
-  const date = new Date(dateString);
+  const date = new Date(dateString)
   return date.toLocaleString('zh-CN', {
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
     hour: '2-digit',
     minute: '2-digit'
-  });
-};
+  })
+}
 
-// 加载统计信息
+// 加载统计信息 - 使用后端返回的数据
+// 修改 loadStats 函数 - 删除其他计算，只保留需要的逻辑
 const loadStats = async () => {
-  loading.value = true;
-  status.value = '加载中...';
+  loading.value = true
+  status.value = '加载中...'
   
   try {
-    const response = await wafReportService.getWafStats();
-    statsData.value = response.data;
-    statsTimestamp.value = response.timestamp;
-    status.value = '统计信息已更新';
-  } catch (error) {
-    status.value = '加载失败';
-    console.error('加载WAF统计信息失败:', error);
-    alert('加载统计信息失败，请重试');
-  } finally {
-    loading.value = false;
-  }
-};
+    // ✅ 我们不需要调用 getWafStats 了，因为你要显示的是生成报告时返回的 totalReports
+    // 但是 loadStats 按钮需要显示什么数据呢？
+    
+    // 方案1：显示最近一次生成的报告的记录数
+    await loadExportHistory()
+    
+    // 从历史记录中获取最近一次的报告记录数
+    let recentTotalReports = 0
+    if (exportHistory.value.length > 0) {
+      recentTotalReports = exportHistory.value[0].totalReports || 0
+    }
+    
+    statsData.value = {
+      totalLogs: recentTotalReports  // 显示最近一次报告的记录数
+    }
 
-// 加载导出历史
+    statsTimestamp.value = new Date()
+    status.value = '统计信息已更新'
+    
+    // 显示统计信息
+    if (recentTotalReports > 0) {
+      ElMessage.success(`共 ${recentTotalReports} 条记录`)
+    } else {
+      ElMessage.info('暂无报告数据')
+    }
+    
+  } catch (error) {
+    status.value = '加载失败'
+    console.error('加载统计信息失败:', error)
+    ElMessage.error('加载统计信息失败，请重试')
+  } finally {
+    loading.value = false
+  }
+}
+
+// 修改 handleGenerate 函数 - 简化逻辑
+const handleGenerate = async () => {
+  if (!newReport.name.trim()) {
+    ElMessage.warning('请输入报告名称')
+    return
+  }
+  
+  if (!newReport.startTime || !newReport.endTime) {
+    ElMessage.warning('请选择时间范围')
+    return
+  }
+  
+  generating.value = true
+  
+  try {
+    // 调用生成报告接口
+    const result = await wafReportService.generateExport({ ...newReport })
+    
+    console.log('生成结果:', result)
+    
+    // ✅ 从生成结果中获取 totalReports（本次报告的记录数）
+    const totalReports = result.data?.totalReports || result.totalReports || 0
+    
+    // 加载历史记录
+    await loadExportHistory()
+    
+    // ✅ 更新统计信息为本次的 totalReports
+    statsData.value = {
+      totalLogs: totalReports
+    }
+    
+    status.value = '统计信息已更新'
+    
+    // 显示本次生成的报告记录数
+    if (totalReports > 0) {
+      ElMessage.success(`报告 "${newReport.name}" 已生成，包含 ${totalReports} 条记录`)
+    } else {
+      ElMessage.success(`报告 "${newReport.name}" 已生成`)
+    }
+    
+    // 清空搜索框
+    searchQuery.value = ''
+    
+    closeGenerateModal()
+    
+  } catch (error) {
+    console.error('生成报告失败:', error)
+    ElMessage.error('生成报告失败，请重试')
+  } finally {
+    generating.value = false
+  }
+}
+
+// 加载导出历史 - 修复：确保能获取到最新数据
 const loadExportHistory = async () => {
   try {
-    exportHistory.value = await wafReportService.getExportHistory();
+    const data = await wafReportService.getExportHistory()
+    // 直接使用返回的数据，不进行额外处理
+    exportHistory.value = Array.isArray(data) ? data : (data?.data || data?.list || [])
   } catch (error) {
-    console.error('加载导出历史失败:', error);
+    console.error('加载导出历史失败:', error)
+    exportHistory.value = []
   }
-};
+}
 
 // 搜索处理
 const handleSearch = () => {
-  showSearchResults.value = searchQuery.value.trim().length > 0;
-};
+  showSearchResults.value = searchQuery.value.trim().length > 0
+}
 
 // 搜索框失去焦点处理
 const onSearchBlur = () => {
   setTimeout(() => {
-    showSearchResults.value = false;
-  }, 200);
-};
+    showSearchResults.value = false
+  }, 200)
+}
+
+// 执行搜索（点击放大镜或按回车时调用）
+const performSearch = () => {
+  showSearchResults.value = false
+  if (searchQuery.value.trim()) {
+    ElMessage.success(`找到 ${displayExports.value.length} 条报告`)
+  }
+}
 
 // 选择导出记录
 const selectExport = (filename) => {
-  searchQuery.value = filename;
-  showSearchResults.value = false;
-};
+  searchQuery.value = filename
+  showSearchResults.value = false
+  performSearch()
+}
 
 // 下载导出文件
 const downloadExport = async (taskId, filename) => {
   try {
-    await wafReportService.downloadExport(taskId, filename);
+    const response = await wafReportService.downloadExport(taskId)
+    const blob = response.data
+    
+    const url = window.URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    
+    const downloadName = filename || `waf_report_${taskId}.${newReport.format}`
+    link.download = downloadName
+    
+    document.body.appendChild(link)
+    link.click()
+    
+    document.body.removeChild(link)
+    window.URL.revokeObjectURL(url)
+    
+    ElMessage.success('开始下载文件')
   } catch (error) {
-    console.error('下载导出文件失败:', error);
-    alert('下载文件失败，请重试');
+    console.error('下载导出文件失败:', error)
+    ElMessage.error('下载文件失败，请重试')
   }
-};
+}
 
-// 删除导出记录
-const deleteExport = async (taskId) => {
-  if (confirm('确定要删除此导出记录吗？')) {
-    try {
-      await wafReportService.deleteExport(taskId);
-      await loadExportHistory();
-      alert('删除成功');
-    } catch (error) {
-      console.error('删除导出记录失败:', error);
-      alert('删除失败，请重试');
-    }
+const previewExport = async (taskId) => {
+  try {
+    const blob = await wafReportService.previewExport(taskId)
+    const url = URL.createObjectURL(
+      new Blob([blob], { type: 'application/pdf' })
+    )
+    window.open(url)
+    ElMessage.success('正在预览报告')
+  } catch (error) {
+    console.error('预览报告失败:', error)
+    ElMessage.error('预览报告失败，请重试')
   }
-};
+}
 
 // 打开生成报告弹窗
 const openGenerateModal = () => {
-  showModal.value = true;
+  showModal.value = true
+  const endTime = new Date()
+  const startTime = new Date()
+  startTime.setDate(startTime.getDate() - 1)
   
-  // 设置默认时间范围（最近24小时）
-  const endTime = new Date();
-  const startTime = new Date();
-  startTime.setDate(startTime.getDate() - 1);
-  
-  newReport.startTime = startTime.toISOString().slice(0, 16);
-  newReport.endTime = endTime.toISOString().slice(0, 16);
-};
+  newReport.startTime = startTime.toISOString().slice(0, 16)
+  newReport.endTime = endTime.toISOString().slice(0, 16)
+}
+
+// 对话框关闭处理
+const handleDialogClose = (done) => {
+  if (!generating.value) {
+    closeGenerateModal()
+    done()
+  }
+}
 
 // 关闭生成报告弹窗
 const closeGenerateModal = () => {
   if (!generating.value) {
-    showModal.value = false;
-    // 重置表单
+    showModal.value = false
+    const name = newReport.name
     Object.keys(newReport).forEach(key => {
       if (key === 'format') {
-        newReport[key] = 'pdf';
-      } else {
-        newReport[key] = '';
+        newReport[key] = 'pdf'
+      } else if (key === 'action') {
+        newReport[key] = 'BLOCK'
+      } else if (key === 'minScore') {
+        newReport[key] = 0
+      } else if (key === 'maxScore') {
+        newReport[key] = 100
+      } else if (key !== 'name') {
+        newReport[key] = ''
       }
-    });
+    })
+    newReport.name = name
   }
-};
+}
 
-// 点击弹窗外部关闭
-const closeModalOnBackdrop = (event) => {
-  if (event.target === event.currentTarget && !generating.value) {
-    closeGenerateModal();
-  }
-};
+// 处理表单提交 - 修复：确保生成报告后立即显示
 
-// 处理表单提交
-const handleGenerate = async () => {
-  const validation = wafReportService.validateExportData(newReport);
-  if (!validation.isValid) {
-    alert(validation.message);
-    return;
-  }
-  
-  generating.value = true;
-  
-  try {
-    const result = await wafReportService.generateExport(newReport);
-    
-    alert(`报告 "${result.filename}" 生成成功！`);
-    
-    // 重新加载导出历史
-    await loadExportHistory();
-    closeGenerateModal();
-    
-  } catch (error) {
-    console.error('生成报告失败:', error);
-    alert('生成报告失败，请重试');
-  } finally {
-    generating.value = false;
-  }
-};
 
 // 组件挂载时自动加载数据
 onMounted(() => {
-  loadStats();
-  loadExportHistory();
-});
+  loadStats()
+  loadExportHistory()
+})
 </script>
 
 <style scoped>
-/* 原有的样式保持不变，新增统计信息相关样式 */
-
+/* 原有样式保持不变 */
 .protection-report {
   padding: 20px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #0c0c0c 0%, #1a1a2e 50%, #16213e 100%);
   min-height: calc(100vh - 80px);
   font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
 }
@@ -557,36 +535,9 @@ onMounted(() => {
 }
 
 .refresh-btn {
-  background: #3498db;
-  color: white;
-  border: none;
-  padding: 12px 24px;
-  border-radius: 8px;
-  cursor: pointer;
-  font-size: 14px;
   display: flex;
   align-items: center;
   gap: 8px;
-  transition: all 0.3s ease;
-}
-
-.refresh-btn:hover:not(:disabled) {
-  background: #2980b9;
-  transform: translateY(-2px);
-}
-
-.refresh-btn:disabled {
-  background: #bdc3c7;
-  cursor: not-allowed;
-}
-
-.fa-spin {
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
 }
 
 .status {
@@ -600,467 +551,193 @@ onMounted(() => {
   gap: 20px;
 }
 
-.input-group {
+.search-container {
   position: relative;
-}
-
-.input-group input {
-  padding: 12px 16px;
-  border: 2px solid #e0e0e0;
-  border-radius: 8px;
-  font-size: 14px;
   width: 300px;
-  transition: border-color 0.3s ease;
 }
 
-.input-group input:focus {
-  outline: none;
-  border-color: #3498db;
+.search-input {
+  width: 100%;
 }
 
-.input-group label {
-  position: absolute;
-  left: 16px;
-  top: 12px;
-  color: #999;
-  font-size: 14px;
-  pointer-events: none;
-  transition: all 0.3s ease;
-}
-
-.input-group input:focus + label,
-.input-group input:not(:placeholder-shown) + label {
-  top: -8px;
-  left: 12px;
-  font-size: 12px;
-  color: #3498db;
-  background: white;
-  padding: 0 4px;
-}
-
-.match-results {
+.search-results-dropdown {
   position: absolute;
   top: 100%;
   left: 0;
   right: 0;
+  z-index: 2000;
+}
+
+.match-results {
   background: white;
   border: 1px solid #e0e0e0;
   border-top: none;
   border-radius: 0 0 8px 8px;
   max-height: 200px;
   overflow-y: auto;
-  z-index: 1000;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
 }
 
 .match-item {
   padding: 12px 16px;
   cursor: pointer;
   transition: background-color 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
 .match-item:hover {
   background-color: #f8f9fa;
 }
 
-.login-get {
-  background: #27ae60;
-  color: white;
-  border: none;
-  padding: 12px 24px;
-  border-radius: 8px;
-  cursor: pointer;
-  font-size: 14px;
+.match-item .el-icon {
+  color: #409eff;
+}
+
+.generate-btn {
   display: flex;
   align-items: center;
   gap: 8px;
-  transition: all 0.3s ease;
 }
 
-.login-get:hover {
-  background: #229954;
-  transform: translateY(-2px);
-}
-
-/* 统计信息样式 */
-.stats-container {
-  background: white;
-  border-radius: 15px;
-  box-shadow: 0 10px 30px rgba(0,0,0,0.1);
-  margin-bottom: 20px;
-  padding: 20px;
-}
-
-.stats-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 20px;
-  border-bottom: 1px solid #e0e0e0;
-  padding-bottom: 15px;
-}
-
-.stats-header h3 {
-  margin: 0;
-  color: #2c3e50;
-}
-
-.last-updated {
-  color: #7f8c8d;
-  font-size: 14px;
-}
-
-.stats-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 20px;
-  margin-bottom: 30px;
-}
-
-.stat-card {
-  display: flex;
-  align-items: center;
-  background: #f8f9fa;
-  border-radius: 10px;
-  padding: 20px;
-  box-shadow: 0 4px 6px rgba(0,0,0,0.05);
-  transition: transform 0.3s ease;
-}
-
-.stat-card:hover {
-  transform: translateY(-5px);
-}
-
-.stat-icon {
-  width: 60px;
-  height: 60px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-right: 15px;
-  font-size: 24px;
-  color: white;
-}
-
-.stat-icon.total {
-  background: linear-gradient(135deg, #3498db, #2980b9);
-}
-
-.stat-icon.blocked {
-  background: linear-gradient(135deg, #e74c3c, #c0392b);
-}
-
-.stat-icon.allowed {
-  background: linear-gradient(135deg, #27ae60, #229954);
-}
-
-.stat-icon.bypass {
-  background: linear-gradient(135deg, #f39c12, #e67e22);
-}
-
-.stat-icon.unique {
-  background: linear-gradient(135deg, #9b59b6, #8e44ad);
-}
-
-.stat-value {
-  font-size: 24px;
-  font-weight: bold;
-  color: #2c3e50;
-  margin-bottom: 5px;
-}
-
-.stat-label {
-  font-size: 14px;
-  color: #7f8c8d;
-}
-
-.detailed-stats {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: 30px;
-}
-
-.stat-section {
-  background: #f8f9fa;
-  border-radius: 10px;
-  padding: 20px;
-}
-
-.stat-section h4 {
-  margin: 0 0 15px 0;
-  color: #2c3e50;
-  border-bottom: 1px solid #e0e0e0;
-  padding-bottom: 10px;
-}
-
-.stat-list {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.stat-item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.stat-name {
-  flex: 1;
-  font-weight: 500;
-  color: #2c3e50;
-  font-size: 14px;
-}
-
-.stat-count {
-  width: 80px;
-  text-align: right;
-  font-size: 14px;
-  color: #7f8c8d;
-}
-
-.stat-bar {
-  flex: 2;
-  height: 8px;
-  background: #e0e0e0;
-  border-radius: 4px;
-  overflow: hidden;
-}
-
-.stat-bar-fill {
-  height: 100%;
-  background: linear-gradient(90deg, #3498db, #2980b9);
-  border-radius: 4px;
-  transition: width 0.5s ease;
-}
-
-.stat-percentage {
-  width: 40px;
-  text-align: right;
-  font-size: 14px;
-  color: #7f8c8d;
-}
-
-/* 内容区域样式 */
-.content {
-  background: white;
+.content-card {
   border-radius: 15px;
   box-shadow: 0 20px 40px rgba(0,0,0,0.1);
-  overflow: hidden;
+  background: white;
+  border: none;
 }
 
-.tlayar {
-  display: grid;
-  grid-template-columns: 2fr 1fr 1fr;
+.table-header {
   padding: 20px;
-  background: #313031;
+  background-color: rgba(52, 152, 219, 0.8);
   color: white;
   font-weight: bold;
   font-size: 1.1em;
+  border-radius: 8px 8px 0 0;
 }
 
-.thirdlayar {
-  display: grid;
-  grid-template-columns: 2fr 1fr 1fr;
-  padding: 20px;
-  border-bottom: 1px solid #ecf0f1;
-  transition: all 0.3s ease;
+.header-row {
+  display: flex;
   align-items: center;
 }
 
-.thirdlayar:hover {
-  background: #f8f9fa;
+.reports-container {
+  padding: 0;
+}
+
+.empty-state {
+  padding: 60px 20px;
+  text-align: center;
+}
+
+.empty-state .el-icon {
+  color: #bdc3c7;
+}
+
+.empty-state p {
+  color: #7f8c8d;
+  margin-top: 10px;
+}
+
+.report-row {
+  padding: 20px;
+  border-bottom: 1px solid #ecf0f1;
+  margin: 0 !important;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+}
+
+.report-row:hover {
+  background: rgb(4, 1, 41);
   transform: translateX(5px);
 }
 
 .report-title {
-  color: #2c3e50;
+  color: #ffffff;
   font-weight: 600;
   font-size: 15px;
+  display: flex;
+  align-items: center;
 }
 
 .report-time {
   color: #7f8c8d;
   font-size: 14px;
+  display: flex;
+  align-items: center;
 }
 
 .button-group {
   display: flex;
   gap: 10px;
+  justify-content: flex-start;
 }
 
-.btn {
-  padding: 8px 16px;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 12px;
+.download-btn,
+.preview-btn {
   display: flex;
   align-items: center;
   gap: 6px;
-  transition: all 0.3s ease;
 }
 
-.btn.download {
-  background: #3498db;
-  color: white;
-}
-
-.btn.download:hover {
-  background: #2980b9;
-}
-
-.btn.delete {
-  background: #e74c3c;
-  color: white;
-}
-
-.btn.delete:hover {
-  background: #c0392b;
-}
-
-.empty-state {
-  text-align: center;
-  padding: 60px 20px;
-  color: #7f8c8d;
-}
-
-.empty-state i {
-  font-size: 48px;
-  margin-bottom: 20px;
-  color: #bdc3c7;
-}
-
-.empty-state h3 {
-  margin-bottom: 10px;
-  color: #34495e;
-}
-
-.empty-state p {
-  color: #7f8c8d;
-}
-
-/* 弹窗样式 */
-.modal {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background: rgba(0, 0, 0, 0.5);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 1000;
-}
-
-.modal-content {
-  background: white;
+.generate-dialog {
   border-radius: 15px;
-  width: 90%;
-  max-width: 600px;
-  max-height: 90vh;
-  overflow-y: auto;
-  box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+  overflow: hidden;
 }
 
-.modal-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
+.generate-dialog :deep(.el-dialog__header) {
   padding: 20px;
   border-bottom: 1px solid #e0e0e0;
+  margin: 0;
 }
 
-.modal-title {
-  margin: 0;
+.generate-dialog :deep(.el-dialog__title) {
   color: #2c3e50;
   font-size: 1.5em;
 }
 
-.close-btn {
-  background: none;
-  border: none;
-  font-size: 24px;
-  cursor: pointer;
-  color: #7f8c8d;
-  transition: color 0.3s ease;
+.generate-dialog :deep(.el-dialog__body) {
+  padding: 20px;
 }
 
-.close-btn:hover {
-  color: #e74c3c;
-}
-
-.form-group {
+.generate-dialog :deep(.el-form-item) {
   margin-bottom: 20px;
-  padding: 0 20px;
 }
 
-.form-group label {
-  display: block;
-  margin-bottom: 8px;
-  color: #2c3e50;
-  font-weight: 500;
+.generate-dialog :deep(.el-divider) {
+  margin: 20px 0;
 }
 
-.form-control {
-  width: 100%;
-  padding: 12px;
-  border: 2px solid #e0e0e0;
+.generate-dialog :deep(.el-collapse) {
+  border: none;
+}
+
+.generate-dialog :deep(.el-collapse-item__header) {
+  background: #f8f9fa;
+  border: none;
   border-radius: 8px;
-  font-size: 14px;
-  transition: border-color 0.3s ease;
+  padding: 12px 20px;
+  font-weight: 600;
 }
 
-.form-control:focus {
-  outline: none;
-  border-color: #3498db;
+.generate-dialog :deep(.el-collapse-item__wrap) {
+  border: none;
+  background: transparent;
 }
 
-.date-group {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 20px;
-  padding: 0 20px;
+.generate-dialog :deep(.el-collapse-item__content) {
+  padding: 20px;
+  background: #f8f9fa;
+  border-radius: 0 0 8px 8px;
 }
 
-.modal-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
+.generate-dialog :deep(.el-dialog__footer) {
   padding: 20px;
   border-top: 1px solid #e0e0e0;
 }
 
-.btn-cancel {
-  background: #95a5a6;
-  color: white;
-  border: none;
-  padding: 12px 24px;
-  border-radius: 8px;
-  cursor: pointer;
-  transition: background-color 0.3s ease;
-}
-
-.btn-cancel:hover {
-  background: #7f8c8d;
-}
-
-.btn-submit {
-  background: #27ae60;
-  color: white;
-  border: none;
-  padding: 12px 24px;
-  border-radius: 8px;
-  cursor: pointer;
-  transition: background-color 0.3s ease;
-}
-
-.btn-submit:hover {
-  background: #229954;
-}
-
-/* 响应式设计 */
 @media (max-width: 768px) {
   .controls {
     flex-direction: column;
@@ -1077,30 +754,24 @@ onMounted(() => {
     gap: 15px;
   }
   
-  .input-group input {
+  .search-container {
     width: 100%;
   }
   
-  .stats-grid {
-    grid-template-columns: 1fr;
-  }
-  
-  .detailed-stats {
-    grid-template-columns: 1fr;
-  }
-  
-  .tlayar,
-  .thirdlayar {
-    grid-template-columns: 1fr;
+  .table-header,
+  .report-row {
+    flex-direction: column;
     gap: 10px;
-  }
-  
-  .date-group {
-    grid-template-columns: 1fr;
+    text-align: center;
   }
   
   .button-group {
-    justify-content: flex-start;
+    justify-content: center;
+    width: 100%;
+  }
+  
+  .generate-dialog {
+    width: 90% !important;
   }
 }
 </style>

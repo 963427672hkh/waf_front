@@ -53,12 +53,20 @@
           <span class="user-role">{{ user?.role }}</span>
           <button @click="handleLogout" class="logout-btn">退出</button>
         </div>
-        <select class="control-select">
-          <option>全部应用</option>
-        </select>
-        <select class="control-select">
-          <option>近24小时</option>
-        </select>
+        <el-button 
+          type="danger" 
+          :loading="logoutLoading"
+          @click="handleLogout"
+          :disabled="loading"
+          class="logout-btn"
+          size="large"
+        >
+          <template #icon>
+            <el-icon><SwitchButton /></el-icon>
+          </template>
+          退出登录
+        </el-button>
+
       </div>
     </header>
     
@@ -93,76 +101,107 @@
   </div>
 </template>
 
-<script>
-import { ref, onMounted } from 'vue'
-import TrafficAnalysis from './TrafficAnalysis.vue'
-import SecurityStatus from './SecurityStatus.vue'
-import ProtectionReport from './ProtectionReport.vue'
-import WafDashboard from './WafDashboard.vue'
-import AlertManagement from './AlertManagement.vue'
-import RuleManagement from './RuleManagement.vue'
-import { useDashboard } from '../composables/useDashboard'
+<script setup>
+import {
+  SwitchButton
+} from '@element-plus/icons-vue'
+import { ElButton, ElMessage, ElMessageBox } from 'element-plus'
+import 'element-plus/dist/index.css'
+import { onMounted, ref } from 'vue'
+import { useRouter } from 'vue-router'
 import { useAuth } from '../composables/useAuth'
+import { useDashboard } from '../composables/useDashboard'
+import AlertManagement from './AlertManagement.vue'
+import ProtectionReport from './ProtectionReport.vue'
+import RuleManagement from './RuleManagement.vue'
+import SecurityStatus from './SecurityStatus.vue'
+import TrafficAnalysis from './TrafficAnalysis.vue'
+import WafDashboard from './WafDashboard.vue'
 
-export default {
-  name: 'Dashboard',
-  components: {
-    TrafficAnalysis,
-    SecurityStatus,
-    ProtectionReport,
-    WafDashboard,
-    AlertManagement,
-    RuleManagement
-  },
-  setup() {
-    const { 
-      loading, 
-      error, 
-      refreshData
-    } = useDashboard()
 
-    const {
-      user,
-      isAuthenticated,
-      logout,
-      initAuth
+const router = useRouter()
+const { 
+  loading, 
+  error, 
+  refreshData
+} = useDashboard()
+
+const {
+  user,
+  isAuthenticated,
+  logout,
+  initAuth
     } = useAuth()
 
+const logoutLoading = loading // 可以使用同一个loading状态
+
     // 当前页面状态
-    const currentPage = ref('traffic')
+const currentPage = ref('traffic')
 
     // 切换页面
-    const switchPage = (page) => {
-      currentPage.value = page
+const switchPage = (page) => {
+  currentPage.value = page
     }
 
     // 处理退出登录
-    const handleLogout = async () => {
-      try {
-        await logout()
-        // 退出成功后路由会自动跳转到登录页
-      } catch (err) {
-        console.error('退出登录失败:', err)
-      }
+const handleLogout = async () => {
+  try {
+    // 1. 确认
+    await ElMessageBox.confirm('确定要退出登录吗？', '退出确认', {
+      type: 'warning',
+      confirmButtonText: '确定退出',
+      cancelButtonText: '取消'
+    })
+    
+    logoutLoading.value = true
+    
+    // 2. 备份token（清理前）
+    const oldToken = localStorage.getItem('waf_access_token')
+    
+    // 4. 显示成功提示
+    ElMessage.success({
+      message: '退出登录成功',
+      duration: 2000
+    })
+    
+    // 5. 跳转到登录页
+    setTimeout(() => {
+      router.push('/login')
+    }, 800)
+    
+    // 6. 异步尝试通知后端（不阻塞用户）
+    if (oldToken) {
+      setTimeout(async () => {
+        try {
+          await logout()
+          console.log('后端通知成功')
+        } catch (backendErr) {
+          console.log('后端通知失败（不影响用户）:', backendErr.message)
+          // 这里可以记录日志，但不打扰用户
+        }
+      }, 100)
     }
+    
+  } catch (error) {
+    // 用户取消
+    if (error === 'cancel' || error === 'close') {
+      return
+    }
+    console.error('退出过程异常:', error)
+  } finally {
+    logoutLoading.value = false
+  }
+}
+
 
     // 初始化认证状态
-    onMounted(async () => {
+onMounted(async () => {
       await initAuth()
     })
 
-    return {
-      loading,
-      error,
-      refreshData,
-      currentPage,
-      switchPage,
-      user,
-      isAuthenticated,
-      handleLogout
-    }
-  }
-}
+
+
+
 </script>
 
 <style>

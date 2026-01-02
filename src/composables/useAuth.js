@@ -1,5 +1,5 @@
 // 认证管理组合式函数
-import { ref, reactive, computed } from 'vue'
+import { computed, ref } from 'vue'
 import { authAPI } from '../api/authAPI'
 
 // 全局状态
@@ -119,24 +119,53 @@ export function useAuth() {
   }
 
   // 注册
-  const register = async (username, password, role = 'OPERATOR') => {
-    loading.value = true
-    error.value = null
+// useAuth.js 或类似文件
+
+const register = async (username, password, role = 'OPERATOR') => {
+  loading.value = true
+  error.value = null
+  
+  try {
+    // 直接使用 authAPI.createUser
+    const userData = await authAPI.createUser(username, password, role)
     
-    try {
-      const response = await authAPI.createUser(username, password, role)
-      
-      // 注册成功后自动登录
-      await login(username, password)
-      
-      return response
-    } catch (err) {
-      error.value = err.response?.data?.message || '注册失败'
-      throw err
-    } finally {
-      loading.value = false
+    console.log('注册成功，用户:', userData)
+    
+    // 🚨 重要：不要在这里调用 login！
+    // 注册和登录是分开的操作
+    
+    // 返回成功结果
+    return {
+      success: true,
+      user: userData,
+      message: '注册成功'
     }
+    
+  } catch (err) {
+    console.error('注册API失败:', err)
+    
+    // 详细错误处理
+    const status = err.response?.status
+    const data = err.response?.data
+    
+    if (status === 401) {
+      error.value = '注册需要有效权限（可能是管理员功能）'
+    } else if (status === 409) {
+      error.value = data?.message || '用户名已存在'
+    } else if (data?.message) {
+      error.value = data.message
+    } else if (err.message.includes('Network')) {
+      error.value = '网络连接失败'
+    } else {
+      error.value = '注册失败，请重试'
+    }
+    
+    throw err
+    
+  } finally {
+    loading.value = false
   }
+}
 
   // 获取用户信息
   const fetchUserProfile = async () => {
@@ -165,14 +194,9 @@ export function useAuth() {
     try {
       const response = await authAPI.refreshToken(refreshToken.value)
       const { data } = response
-
-      // 兼容后端返回的 camelCase 字段
-      const newAccessToken = data.accessToken || data.access_token
-      const newRefreshToken = data.refreshToken || data.refresh_token || refreshToken.value
-      const expiresIn = data.expiresIn || data.expires_in
       
       // 更新访问令牌
-      setTokens(data.accessToken, refreshToken.value)
+      setTokens(data.access_token, refreshToken.value)
       
       // 重新设置自动刷新
       setupTokenRefresh(data.expires_in)
@@ -207,19 +231,29 @@ export function useAuth() {
 
   // 退出登录
   const logout = async () => {
-    loading.value = true
-    
-    try {
-      if (accessToken.value) {
-        await authAPI.logout()
-      }
-    } catch (err) {
-      console.error('退出登录失败:', err)
-    } finally {
-      clearAuth()
-      loading.value = false
+  loading.value = true
+  let apiSuccess = false  // 记录API是否成功
+  
+  try {
+    if (accessToken.value) {
+      await authAPI.logout()  // 调用API
+      apiSuccess = true
+      console.log('后端API退出成功')
+    } else {
+      console.log('没有token，仅清理本地')
+      apiSuccess = true  // 没有token也算成功
     }
+  } catch (err) {
+    console.error('退出API失败:', err)
+    apiSuccess = false
+    throw err  // 抛出错误给上层
+  } finally {
+    clearAuth()
+    loading.value = false
   }
+  
+  return apiSuccess
+}
 
   // 检查用户名可用性
   const checkUsername = async (username, excludeId = null) => {
@@ -264,6 +298,8 @@ export function useAuth() {
     checkUsername,
     initAuth,
     clearAuth,
-    setupTokenRefresh
+    setupTokenRefresh,
+    setUser,
+    setTokens
   }
 }
