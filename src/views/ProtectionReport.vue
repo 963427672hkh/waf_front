@@ -209,7 +209,7 @@
 </template>
 
 <script setup>
-import wafReportService from '@api/report';
+import wafReportService from '@/api/report';
 import {
   Document,
   Download,
